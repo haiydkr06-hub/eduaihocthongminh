@@ -50,7 +50,11 @@ Hàm số nghịch biến trên (-∞; -b/2a) và đồng biến trên (-b/2a; +
     setTimeout(() => setNotice(null), 4000)
   }
 
-  const handleUpdateQuestion = (idx: number, field: keyof AIQuizQuestion, value: any) => {
+  const handleUpdateQuestion = <K extends keyof AIQuizQuestion>(
+    idx: number,
+    field: K,
+    value: AIQuizQuestion[K]
+  ) => {
     const updated = [...generatedQuestions]
     updated[idx] = { ...updated[idx], [field]: value }
     setGeneratedQuestions(updated)
@@ -72,24 +76,27 @@ Hàm số nghịch biến trên (-∞; -b/2a) và đồng biến trên (-b/2a; +
     if (generatedQuestions.length === 0) return
 
     setSaving(true)
-    await teacherService.createQuiz({
-      course_id: 'tc-1',
-      courseTitle,
-      title: quizTitle,
-      timeLimit: 15,
-      passScore: 60,
-      questionsCount: generatedQuestions.length,
-    })
-    setSaving(false)
+    try {
+      await teacherService.createQuiz({
+        course_id: 'tc-1',
+        courseTitle,
+        title: quizTitle,
+        timeLimit: 15,
+        passScore: 60,
+        questionsCount: generatedQuestions.length,
+      })
 
-    setNotice(
-      status === 'published'
-        ? `Đã xuất bản bài kiểm tra "${quizTitle}" thành công!`
-        : `Đã lưu bản nháp bài kiểm tra "${quizTitle}" thành công!`
-    )
-    setTimeout(() => {
-      navigate('/teacher/quizzes')
-    }, 1500)
+      setNotice(
+        status === 'published'
+          ? `Đã xuất bản bài kiểm tra "${quizTitle}" thành công!`
+          : `Đã lưu bản nháp bài kiểm tra "${quizTitle}" thành công!`
+      )
+      setTimeout(() => {
+        navigate('/teacher/quizzes')
+      }, 1500)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -172,7 +179,7 @@ Hàm số nghịch biến trên (-∞; -b/2a) và đồng biến trên (-b/2a; +
               </label>
               <select
                 value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value as any)}
+                onChange={(e) => setDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
                 className="w-full px-3 py-2 bg-[#f7f8fc] border border-[#eceef4] rounded-xl text-xs focus:outline-none focus:border-[#6857DF]"
               >
                 <option value="easy">Dễ (Nhận biết)</option>

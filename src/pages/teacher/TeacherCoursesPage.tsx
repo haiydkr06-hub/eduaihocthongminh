@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, useCallback, type FormEvent } from 'react'
 import {
   BookOpen,
   Plus,
@@ -31,21 +31,27 @@ export function TeacherCoursesPage() {
   const [selectedCourse, setSelectedCourse] = useState<TeacherCourse | null>(null)
   const [lessons, setLessons] = useState<TeacherLesson[]>([])
   const [loadingLessons, setLoadingLessons] = useState(false)
+  const [savingLesson, setSavingLesson] = useState(false)
   const [showAddLesson, setShowAddLesson] = useState(false)
   const [lessonTitle, setLessonTitle] = useState('')
   const [lessonContent, setLessonContent] = useState('')
   const [lessonVideo, setLessonVideo] = useState('')
   const [lessonDuration, setLessonDuration] = useState(20)
 
-  const loadCourses = async () => {
-    const data = await teacherService.getCourses(profile?.id)
-    setCourses(data)
-    setLoading(false)
-  }
+  const teacherId = profile?.id
+
+  const loadCourses = useCallback(async () => {
+    try {
+      const data = await teacherService.getCourses(teacherId)
+      setCourses(data)
+    } finally {
+      setLoading(false)
+    }
+  }, [teacherId])
 
   useEffect(() => {
     let active = true
-    teacherService.getCourses(profile?.id)
+    teacherService.getCourses(teacherId)
       .then((data) => {
         if (active) {
           setCourses(data)
@@ -59,7 +65,7 @@ export function TeacherCoursesPage() {
       })
 
     const handleUpdate = () => {
-      loadCourses()
+      void loadCourses()
     }
     window.addEventListener('eduai:courses_updated', handleUpdate)
 
@@ -67,7 +73,7 @@ export function TeacherCoursesPage() {
       active = false
       window.removeEventListener('eduai:courses_updated', handleUpdate)
     }
-  }, [profile?.id])
+  }, [teacherId, loadCourses])
 
   const handleCreateCourse = async (e: FormEvent) => {
     e.preventDefault()
@@ -102,24 +108,29 @@ export function TeacherCoursesPage() {
 
   const handleAddLesson = async (e: FormEvent) => {
     e.preventDefault()
-    if (!selectedCourse || !lessonTitle.trim()) return
+    if (!selectedCourse || !lessonTitle.trim() || savingLesson) return
 
-    const newLesson = await teacherService.addLesson({
-      course_id: selectedCourse.id,
-      title: lessonTitle.trim(),
-      content: lessonContent.trim(),
-      video_url: lessonVideo.trim() || undefined,
-      duration_minutes: lessonDuration,
-      position: lessons.length + 1,
-    })
+    setSavingLesson(true)
+    try {
+      const newLesson = await teacherService.addLesson({
+        course_id: selectedCourse.id,
+        title: lessonTitle.trim(),
+        content: lessonContent.trim(),
+        video_url: lessonVideo.trim() || undefined,
+        duration_minutes: lessonDuration,
+        position: lessons.length + 1,
+      })
 
-    setLessons([...lessons, newLesson])
-    setShowAddLesson(false)
-    setLessonTitle('')
-    setLessonContent('')
-    setLessonVideo('')
-    setNotice(`Đã thêm bài giảng "${newLesson.title}" vào khóa học!`)
-    setTimeout(() => setNotice(null), 3000)
+      setLessons([...lessons, newLesson])
+      setShowAddLesson(false)
+      setLessonTitle('')
+      setLessonContent('')
+      setLessonVideo('')
+      setNotice(`Đã thêm bài giảng "${newLesson.title}" vào khóa học!`)
+      setTimeout(() => setNotice(null), 3000)
+    } finally {
+      setSavingLesson(false)
+    }
   }
 
   return (
@@ -386,9 +397,10 @@ export function TeacherCoursesPage() {
                     </button>
                     <button
                       type="submit"
-                      className="px-3 py-1.5 rounded-lg bg-[#6857DF] text-white text-xs font-bold hover:bg-[#5144BE]"
+                      disabled={savingLesson}
+                      className="px-3 py-1.5 rounded-lg bg-[#6857DF] text-white text-xs font-bold hover:bg-[#5144BE] disabled:opacity-50 transition"
                     >
-                      Lưu bài giảng
+                      {savingLesson ? 'Đang lưu...' : 'Lưu bài giảng'}
                     </button>
                   </div>
                 </form>

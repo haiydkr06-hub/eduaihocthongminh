@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import type { AppRole } from '../../types/auth';
+import { getFriendlyErrorMessage } from '../../lib/errorMessage';
 
 export default function RegisterPage() {
   const [role, setRole] = useState<'student' | 'teacher'>('student');
@@ -19,10 +21,32 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { signUp } = useAuth();
+  const { signUp, user, role: currentRole, loading: authLoading } = useAuth();
+
+  // Đang tải phiên đăng nhập -> hiện spinner tránh nhấp nháy UI
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f8fa] gap-3">
+        <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+        <p className="text-sm font-medium text-gray-500">Đang kiểm tra phiên đăng nhập...</p>
+      </div>
+    );
+  }
+
+  // Nếu người dùng đã đăng nhập, tự động chuyển về Dashboard theo vai trò
+  if (user) {
+    const targetDashboard =
+      currentRole === 'admin'
+        ? '/admin/dashboard'
+        : currentRole === 'teacher'
+        ? '/teacher/dashboard'
+        : '/student/dashboard';
+    return <Navigate to={targetDashboard} replace />;
+  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError('');
     setSuccess('');
@@ -74,8 +98,7 @@ export default function RegisterPage() {
         });
 
         if (sbError) {
-          setError(sbError.message || 'Đăng ký không thành công. Vui lòng thử lại.');
-          setLoading(false);
+          setError(getFriendlyErrorMessage(sbError, 'Đăng ký không thành công. Vui lòng thử lại.'));
           return;
         }
       }
@@ -84,8 +107,8 @@ export default function RegisterPage() {
       setTimeout(() => {
         window.location.href = '/login';
       }, 1500);
-    } catch {
-      setError('Đã có lỗi phát sinh trong quá trình đăng ký. Vui lòng thử lại.');
+    } catch (err: unknown) {
+      setError(getFriendlyErrorMessage(err, 'Đã có lỗi phát sinh trong quá trình đăng ký. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }
@@ -145,8 +168,9 @@ export default function RegisterPage() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => setRole('student')}
-                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between relative ${
+                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between relative disabled:opacity-60 ${
                   role === 'student'
                     ? 'border-primary-600 bg-primary-50/70 shadow-sm ring-2 ring-primary-500/20'
                     : 'border-gray-200 bg-gray-50/60 hover:bg-gray-100 hover:border-gray-300'
@@ -170,8 +194,9 @@ export default function RegisterPage() {
 
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => setRole('teacher')}
-                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between relative ${
+                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between relative disabled:opacity-60 ${
                   role === 'teacher'
                     ? 'border-primary-600 bg-primary-50/70 shadow-sm ring-2 ring-primary-500/20'
                     : 'border-gray-200 bg-gray-50/60 hover:bg-gray-100 hover:border-gray-300'
@@ -201,9 +226,10 @@ export default function RegisterPage() {
               <label className="block text-xs font-bold text-gray-700 mb-1">Họ và Tên</label>
               <input
                 type="text"
+                disabled={loading}
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800 disabled:opacity-60"
                 placeholder="Nguyễn Văn A"
               />
             </div>
@@ -211,9 +237,10 @@ export default function RegisterPage() {
               <label className="block text-xs font-bold text-gray-700 mb-1">Số điện thoại</label>
               <input
                 type="tel"
+                disabled={loading}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800 disabled:opacity-60"
                 placeholder="0912345678"
               />
             </div>
@@ -224,9 +251,10 @@ export default function RegisterPage() {
             <label className="block text-xs font-bold text-gray-700 mb-1">Email đăng ký</label>
             <input
               type="email"
+              disabled={loading}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800 disabled:opacity-60"
               placeholder="nhap@email.com"
             />
           </div>
@@ -237,13 +265,16 @@ export default function RegisterPage() {
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
+                disabled={loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition pr-10 text-sm text-gray-800"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition pr-10 text-sm text-gray-800 disabled:opacity-60"
                 placeholder="Tối thiểu 6 ký tự"
               />
               <button
                 type="button"
+                tabIndex={-1}
+                disabled={loading}
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                 title={showPassword ? 'Ẩn' : 'Hiện'}
@@ -263,13 +294,16 @@ export default function RegisterPage() {
             <div className="relative">
               <input
                 type={showConfirm ? 'text' : 'password'}
+                disabled={loading}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition pr-10 text-sm text-gray-800"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition pr-10 text-sm text-gray-800 disabled:opacity-60"
                 placeholder="Nhập lại mật khẩu"
               />
               <button
                 type="button"
+                tabIndex={-1}
+                disabled={loading}
                 onClick={() => setShowConfirm(!showConfirm)}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                 title={showConfirm ? 'Ẩn' : 'Hiện'}
@@ -288,9 +322,10 @@ export default function RegisterPage() {
             <input
               id="terms"
               type="checkbox"
+              disabled={loading}
               checked={agreeTerms}
               onChange={(e) => setAgreeTerms(e.target.checked)}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded mt-0.5 cursor-pointer"
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded mt-0.5 cursor-pointer disabled:opacity-50"
             />
             <label htmlFor="terms" className="ml-2 block text-xs text-gray-600 leading-normal cursor-pointer select-none">
               Tôi đồng ý với{' '}

@@ -54,15 +54,17 @@ export function TeacherGradingPage() {
   }
 
   const handleSaveGrade = async () => {
-    if (!gradingSub) return
+    if (!gradingSub || saving) return
     setSaving(true)
-    await teacherService.gradeSubmission(gradingSub.id, scoreInput, feedbackInput)
-    setSaving(false)
-
-    setNotice(`Đã chấm điểm thành công cho bài làm của "${gradingSub.studentName}"!`)
-    setGradingSub(null)
-    loadSubmissions()
-    setTimeout(() => setNotice(null), 3000)
+    try {
+      await teacherService.gradeSubmission(gradingSub.id, scoreInput, feedbackInput)
+      setNotice(`Đã chấm điểm thành công cho bài làm của "${gradingSub.studentName}"!`)
+      setGradingSub(null)
+      loadSubmissions()
+      setTimeout(() => setNotice(null), 3000)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const filtered = submissions.filter((s) => {
@@ -102,7 +104,7 @@ export function TeacherGradingPage() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setFilter(tab.id as any)}
+              onClick={() => setFilter(tab.id as 'all' | 'pending' | 'graded')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
                 filter === tab.id
                   ? 'bg-[#6857DF] text-white shadow-sm shadow-[#6857DF]/25'

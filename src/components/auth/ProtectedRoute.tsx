@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, role, loading } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -23,8 +23,10 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />
   }
 
-  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
-    return <Navigate to="/unauthorized" state={{ attemptedUrl: location.pathname, userRole: profile.role }} replace />
+  const effectiveRole = (profile?.role || role || user.user_metadata?.role || 'student') as AppRole
+
+  if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
+    return <Navigate to="/unauthorized" state={{ attemptedUrl: location.pathname, userRole: effectiveRole }} replace />
   }
 
   return <Outlet />

@@ -13,6 +13,15 @@ export interface SearchCourseResult {
   illustration?: string
 }
 
+interface CourseDbRow {
+  id: string
+  title: string
+  category?: string | null
+  description?: string | null
+  thumbnail_url?: string | null
+  profiles?: { full_name?: string } | null
+}
+
 export function CourseSearchBar() {
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<SearchCourseResult[]>([])
@@ -55,13 +64,15 @@ export function CourseSearchBar() {
   useEffect(() => {
     const trimmed = searchTerm.trim()
     if (!trimmed) {
-      setResults([])
-      setLoading(false)
-      return
+      const timer = setTimeout(() => {
+        setResults([])
+        setLoading(false)
+      }, 0)
+      return () => clearTimeout(timer)
     }
 
-    setLoading(true)
     const timeoutId = setTimeout(async () => {
+      setLoading(true)
       try {
         let foundCourses: SearchCourseResult[] = []
 
@@ -82,7 +93,8 @@ export function CourseSearchBar() {
             .limit(8)
 
           if (!error && data && data.length > 0) {
-            foundCourses = data.map((c: any, idx: number) => ({
+            const courseRows = data as unknown as CourseDbRow[]
+            foundCourses = courseRows.map((c, idx: number) => ({
               id: c.id,
               title: c.title,
               category: c.category || 'Môn học',

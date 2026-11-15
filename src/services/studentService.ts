@@ -233,7 +233,19 @@ export const studentService = {
       )
 
       if (enrollments && enrollments.length > 0) {
-        return enrollments.map((e: any, idx: number) => {
+        interface EnrollmentDbRow {
+          status?: string
+          courses?: {
+            id?: string
+            title?: string
+            category?: string
+            description?: string
+            profiles?: { full_name?: string } | null
+            lessons?: { id: string }[] | null
+          } | null
+        }
+        const rows = enrollments as unknown as EnrollmentDbRow[]
+        return rows.map((e, idx: number) => {
           const c = e.courses
           const total = c?.lessons?.length || 18
           const progress = e.status === 'completed' ? 100 : idx === 0 ? 68 : idx === 1 ? 42 : 15
@@ -300,7 +312,16 @@ export const studentService = {
       )
 
       if (data && data.length > 0) {
-        const sbCourses: StudentCourseItem[] = data.map((c: any, idx: number) => ({
+        interface PublishedCourseDbRow {
+          id: string
+          title: string
+          category?: string
+          description?: string
+          profiles?: { full_name?: string } | null
+          lessons?: { id: string }[] | null
+        }
+        const courseRows = data as unknown as PublishedCourseDbRow[]
+        const sbCourses: StudentCourseItem[] = courseRows.map((c, idx: number) => ({
           id: c.id,
           title: c.title,
           category: c.category || 'Môn học',
@@ -373,19 +394,30 @@ export const studentService = {
         )
 
         if (progressData) {
-          completedSet = new Set(progressData.map((p: any) => p.lesson_id))
+          const progRows = progressData as { lesson_id: string }[]
+          completedSet = new Set(progRows.map((p) => p.lesson_id))
         }
       }
 
       if (lessonsData && lessonsData.length > 0) {
-        return lessonsData.map((l: any) => ({
+        interface LessonDbRow {
+          id: string
+          course_id: string
+          title: string
+          content?: string
+          video_url?: string
+          duration_minutes?: number
+          position?: number
+        }
+        const lessonRows = lessonsData as unknown as LessonDbRow[]
+        return lessonRows.map((l) => ({
           id: l.id,
           course_id: l.course_id,
           title: l.title,
-          content: l.content,
+          content: l.content || '',
           video_url: l.video_url,
           duration_minutes: l.duration_minutes || 20,
-          position: l.position,
+          position: l.position ?? 0,
           is_completed: completedSet.has(l.id),
         }))
       }

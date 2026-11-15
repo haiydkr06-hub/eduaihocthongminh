@@ -8,12 +8,13 @@ export function StudentNotificationsPage() {
   const { user } = useAuth()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const userId = user?.id
 
   const fetchNotifications = useCallback(async () => {
-    setLoading(true)
     try {
-      const shared = sharedStore.getSharedNotifications('student', user?.id)
+      const shared = sharedStore.getSharedNotifications('student', userId)
       let combined: NotificationItem[] = shared.map((n) => ({
         id: n.id,
         user_id: n.user_id,
@@ -24,11 +25,11 @@ export function StudentNotificationsPage() {
         created_at: n.created_at,
       }))
 
-      if (isSupabaseConfigured && user?.id) {
+      if (isSupabaseConfigured && userId) {
         const { data, error } = await supabase
           .from('notifications')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .order('created_at', { ascending: false })
 
         if (!error && data && data.length > 0) {
@@ -45,18 +46,28 @@ export function StudentNotificationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id])
+  }, [userId])
 
   useEffect(() => {
-    fetchNotifications()
+    let active = true
+    const load = async () => {
+      await Promise.resolve()
+      if (!active) return
+      await fetchNotifications()
+    }
+    void load()
+    return () => {
+      active = false
+    }
   }, [fetchNotifications])
 
   // Lắng nghe sự kiện thông báo mới từ hệ thống (CustomEvent)
   useEffect(() => {
-    const handleNew = (e: any) => {
-      const notice: SharedNotification = e.detail
+    const handleNew = (e: Event) => {
+      const customEvent = e as CustomEvent<SharedNotification>
+      const notice: SharedNotification = customEvent.detail
       if (!notice) return
-      if (notice.target === 'all' || notice.target === 'students' || (user?.id && notice.user_id === user.id)) {
+      if (notice.target === 'all' || notice.target === 'students' || (userId && notice.user_id === userId)) {
         setNotifications((prev) => {
           if (prev.some((n) => n.id === notice.id)) return prev
           return [notice, ...prev]
@@ -68,7 +79,7 @@ export function StudentNotificationsPage() {
     return () => {
       window.removeEventListener('eduai:new_notification', handleNew)
     }
-  }, [user?.id])
+  }, [userId])
 
   // Lắng nghe Realtime qua kênh 'custom-all-channel'
   useEffect(() => {
@@ -85,7 +96,7 @@ export function StudentNotificationsPage() {
         },
         (payload) => {
           const newNotice = payload.new as NotificationItem
-          if (!newNotice.user_id || newNotice.user_id === user?.id) {
+          if (!newNotice.user_id || newNotice.user_id === userId) {
             setNotifications((prev) => [newNotice, ...prev])
           }
         }
@@ -95,7 +106,7 @@ export function StudentNotificationsPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [user?.id])
+  }, [userId])
 
   const handleMarkAsRead = async (noticeId: string) => {
     setNotifications((prev) =>
@@ -121,12 +132,12 @@ export function StudentNotificationsPage() {
 
     sharedStore.markAllSharedNotificationsRead('student')
 
-    if (isSupabaseConfigured && user?.id) {
+    if (isSupabaseConfigured && userId) {
       try {
         await supabase
           .from('notifications')
           .update({ is_read: true })
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .eq('is_read', false)
       } catch (err) {
         console.warn('Lỗi đánh dấu tất cả đã đọc:', err)

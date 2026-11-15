@@ -7,6 +7,7 @@ import {
   Eye,
   XCircle,
   Check,
+  Clock,
 } from 'lucide-react'
 import { adminService, type AdminCourseItem } from '../../services/adminService'
 
@@ -70,7 +71,7 @@ export function AdminCoursesPage() {
     return matchStatus && matchSearch
   })
 
-  const getStatusBadge = (status: 'draft' | 'published' | 'archived') => {
+  const getStatusBadge = (status: 'draft' | 'published' | 'archived' | 'pending') => {
     switch (status) {
       case 'published':
         return (
@@ -78,10 +79,16 @@ export function AdminCoursesPage() {
             <CheckCircle className="w-3 h-3" /> Đã xuất bản
           </span>
         )
+      case 'pending':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
+            <Clock className="w-3 h-3" /> Chờ duyệt
+          </span>
+        )
       case 'draft':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
-            <XCircle className="w-3 h-3" /> Chờ duyệt / Nháp
+            <XCircle className="w-3 h-3" /> Bản nháp
           </span>
         )
       case 'archived':

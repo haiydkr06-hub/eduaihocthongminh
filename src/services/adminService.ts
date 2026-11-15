@@ -18,7 +18,7 @@ export interface AdminCourseItem {
   instructor_name: string
   lessons_count: number
   students_count: number
-  status: 'draft' | 'published' | 'archived'
+  status: 'draft' | 'published' | 'archived' | 'pending'
   created_at: string
 }
 
@@ -197,19 +197,19 @@ export const adminService = {
         2500
       )
 
-      const profiles = profilesRes.data || []
+      const profiles = (profilesRes.data || []) as { role?: string }[]
       const courses = coursesRes.data || []
       const quizzes = quizzesRes.data || []
-      const attempts = attemptsRes.data || []
+      const attempts = (attemptsRes.data || []) as { score?: number }[]
 
-      const totalStudents = profiles.filter((p: any) => p.role === 'student').length || 142
-      const totalTeachers = profiles.filter((p: any) => p.role === 'teacher').length || 18
+      const totalStudents = profiles.filter((p) => p.role === 'student').length || 142
+      const totalTeachers = profiles.filter((p) => p.role === 'teacher').length || 18
       const totalCourses = courses.length || 24
       const totalQuizzes = quizzes.length || 38
       const totalAttempts = attempts.length || 520
 
       const avgScore = attempts.length
-        ? Math.round(attempts.reduce((acc: number, cur: any) => acc + (cur.score || 0), 0) / attempts.length)
+        ? Math.round(attempts.reduce((acc, cur) => acc + (cur.score || 0), 0) / attempts.length)
         : 78
 
       return {
@@ -316,7 +316,16 @@ export const adminService = {
       )
 
       if (data && data.length > 0) {
-        const sbCourses = data.map((item: any) => ({
+        interface AdminCourseRow {
+          id: string
+          title: string
+          category?: string
+          status?: 'draft' | 'pending' | 'published'
+          created_at: string
+          profiles?: { full_name?: string } | null
+        }
+        const courseRows = data as unknown as AdminCourseRow[]
+        const sbCourses = courseRows.map((item) => ({
           id: item.id,
           title: item.title,
           category: item.category || 'Tổng hợp',
@@ -328,7 +337,7 @@ export const adminService = {
         }))
 
         // Gộp các khóa học tạo từ sharedStore (tránh trùng id)
-        const sbIds = new Set(sbCourses.map((c: any) => c.id))
+        const sbIds = new Set(sbCourses.map((c) => c.id))
         const extras = shared
           .filter((c) => !sbIds.has(c.id))
           .map((c) => ({
@@ -417,7 +426,16 @@ export const adminService = {
         return fallbackQuizzesList
       }
 
-      return data.map((q: any) => ({
+      interface AdminQuizRow {
+        id: string
+        title: string
+        time_limit_minutes?: number
+        pass_score?: number
+        status?: 'draft' | 'published'
+        courses?: { title?: string } | null
+      }
+      const quizRows = data as unknown as AdminQuizRow[]
+      return quizRows.map((q) => ({
         id: q.id,
         title: q.title,
         course_title: q.courses?.title || 'Khóa học',
@@ -456,7 +474,16 @@ export const adminService = {
       )
 
       if (data && data.length > 0) {
-        const sbNotices: SystemNotificationItem[] = data.map((n: any) => ({
+        interface NoticeRow {
+          id: string
+          title: string
+          message: string
+          type?: string
+          created_at: string
+          target?: string
+        }
+        const noticeRows = data as unknown as NoticeRow[]
+        const sbNotices: SystemNotificationItem[] = noticeRows.map((n) => ({
           id: n.id,
           title: n.title,
           message: n.message,
@@ -519,7 +546,8 @@ export const adminService = {
 
         const { data: profiles } = await withTimeout(query, 2500)
         if (profiles && profiles.length > 0) {
-          const rows = profiles.map((p: any) => ({
+          const profileRows = profiles as { id: string }[]
+          const rows = profileRows.map((p) => ({
             user_id: p.id,
             title,
             message,

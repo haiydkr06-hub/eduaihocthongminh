@@ -44,18 +44,21 @@ export function AdminUsersPage() {
   }, [roleFilter, searchQuery])
 
   const handleRoleChange = async (newRole: AppRole) => {
-    if (!selectedUser) return
+    if (!selectedUser || updatingRole) return
     setUpdatingRole(true)
-    const result = await adminService.updateUserRole(selectedUser.id, newRole)
-    setUpdatingRole(false)
+    try {
+      const result = await adminService.updateUserRole(selectedUser.id, newRole)
 
-    if (result.success) {
-      setNotice(`Đã chuyển vai trò của "${selectedUser.full_name}" sang "${newRole}" thành công!`)
-      setSelectedUser(null)
-      refreshUsers()
-      setTimeout(() => setNotice(null), 3000)
-    } else {
-      alert(`Không thể cập nhật: ${result.error}`)
+      if (result.success) {
+        setNotice(`Đã chuyển vai trò của "${selectedUser.full_name}" sang "${newRole}" thành công!`)
+        setSelectedUser(null)
+        refreshUsers()
+        setTimeout(() => setNotice(null), 3000)
+      } else {
+        alert(`Không thể cập nhật: ${result.error}`)
+      }
+    } finally {
+      setUpdatingRole(false)
     }
   }
 

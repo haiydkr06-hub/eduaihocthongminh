@@ -12,7 +12,7 @@ export interface TeacherCourse {
   id: string
   title: string
   category: string
-  status: 'draft' | 'published' | 'archived'
+  status: 'draft' | 'published' | 'archived' | 'pending'
   lessonsCount: number
   studentsCount: number
   createdAt: string
@@ -114,7 +114,8 @@ export const teacherService = {
         supabase.from('courses').select('id').eq('teacher_id', teacherId),
         2500
       )
-      const courseIds = (courses || []).map((c: any) => c.id)
+      const courseRows = (courses || []) as { id: string }[]
+      const courseIds = courseRows.map((c) => c.id)
 
       let studentCount = 0
       if (courseIds.length > 0) {
@@ -159,7 +160,18 @@ export const teacherService = {
       const { data, error } = await withTimeout(query, 2500)
 
       if (!error && data && data.length > 0) {
-        const sbCourses = data.map((c: any) => ({
+        interface TeacherCourseDbRow {
+          id: string
+          title: string
+          category?: string
+          status?: 'draft' | 'pending' | 'published'
+          lessons?: { id: string }[] | null
+          enrollments?: { id: string }[] | null
+          created_at: string
+          description?: string
+        }
+        const rows = data as unknown as TeacherCourseDbRow[]
+        const sbCourses = rows.map((c) => ({
           id: c.id,
           title: c.title,
           category: c.category || 'Môn học',
@@ -171,7 +183,7 @@ export const teacherService = {
         }))
 
         // Gộp các khóa học từ sharedStore (tránh trùng id)
-        const sbIds = new Set(sbCourses.map((c: any) => c.id))
+        const sbIds = new Set(sbCourses.map((c) => c.id))
         const extras = shared
           .filter((c) => !sbIds.has(c.id))
           .map((c) => ({

@@ -8,12 +8,13 @@ export function TeacherNotificationsPage() {
   const { user } = useAuth()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const userId = user?.id
 
   const fetchNotifications = useCallback(async () => {
-    setLoading(true)
     try {
-      const shared = sharedStore.getSharedNotifications('teacher', user?.id)
+      const shared = sharedStore.getSharedNotifications('teacher', userId)
       let combined: NotificationItem[] = shared.map((n) => ({
         id: n.id,
         user_id: n.user_id,
@@ -24,11 +25,11 @@ export function TeacherNotificationsPage() {
         created_at: n.created_at,
       }))
 
-      if (isSupabaseConfigured && user?.id) {
+      if (isSupabaseConfigured && userId) {
         const { data, error } = await supabase
           .from('notifications')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .order('created_at', { ascending: false })
 
         if (!error && data && data.length > 0) {
@@ -45,17 +46,27 @@ export function TeacherNotificationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id])
+  }, [userId])
 
   useEffect(() => {
-    fetchNotifications()
+    let active = true
+    const load = async () => {
+      await Promise.resolve()
+      if (!active) return
+      await fetchNotifications()
+    }
+    void load()
+    return () => {
+      active = false
+    }
   }, [fetchNotifications])
 
   useEffect(() => {
-    const handleNew = (e: any) => {
-      const notice: SharedNotification = e.detail
+    const handleNew = (e: Event) => {
+      const customEvent = e as CustomEvent<SharedNotification>
+      const notice: SharedNotification = customEvent.detail
       if (!notice) return
-      if (notice.target === 'all' || notice.target === 'teachers' || (user?.id && notice.user_id === user.id)) {
+      if (notice.target === 'all' || notice.target === 'teachers' || (userId && notice.user_id === userId)) {
         setNotifications((prev) => {
           if (prev.some((n) => n.id === notice.id)) return prev
           return [notice, ...prev]
@@ -67,7 +78,7 @@ export function TeacherNotificationsPage() {
     return () => {
       window.removeEventListener('eduai:new_notification', handleNew)
     }
-  }, [user?.id])
+  }, [userId])
 
   const handleMarkAsRead = async (noticeId: string) => {
     setNotifications((prev) =>

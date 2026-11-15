@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import { getFriendlyErrorMessage } from '../../lib/errorMessage';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -9,10 +11,38 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { signIn } = useAuth();
+  const { signIn, user, role, loading: authLoading } = useAuth();
+
+  // Đang kiểm tra session của Supabase -> hiển thị spinner để tránh nhấp nháy UI
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f8fa] gap-3">
+        <div className="w-10 h-10 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+        <p className="text-sm font-medium text-gray-500">Đang kiểm tra phiên đăng nhập...</p>
+      </div>
+    );
+  }
+
+  // Đã đăng nhập -> chuyển hướng ngay tới Dashboard theo Role hoặc link redirect
+  if (user) {
+    const params = new URLSearchParams(window.location.search);
+    const redirectParam = params.get('redirect');
+    if (redirectParam && redirectParam.startsWith('/')) {
+      return <Navigate to={redirectParam} replace />;
+    }
+    const userRole = (role || 'student') as string;
+    const targetDashboard =
+      userRole === 'admin'
+        ? '/admin/dashboard'
+        : userRole === 'teacher'
+        ? '/teacher/dashboard'
+        : '/student/dashboard';
+    return <Navigate to={targetDashboard} replace />;
+  }
 
   const handleLogin = async (e?: React.FormEvent, demoEmail?: string, demoPass?: string) => {
     if (e) e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError('');
 
@@ -29,8 +59,14 @@ export default function LoginPage() {
       // Đăng nhập qua auth context (tự động xử lý cả tài khoản Demo và Supabase)
       const res = await signIn(loginEmail, loginPass);
       if (res?.error) {
-        setError(res.error.message || 'Email hoặc mật khẩu không chính xác. Vui lòng thử lại.');
-        setLoading(false);
+        setError(getFriendlyErrorMessage(res.error, 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.'));
+        return;
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const redirectParam = params.get('redirect');
+      if (redirectParam && redirectParam.startsWith('/')) {
+        window.location.href = redirectParam;
         return;
       }
 
@@ -45,17 +81,22 @@ export default function LoginPage() {
       }
     } catch {
       // Fallback gọi trực tiếp Supabase
-      const { error: directErr } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password: loginPass,
-      });
+      try {
+        const { error: directErr } = await supabase.auth.signInWithPassword({
+          email: loginEmail,
+          password: loginPass,
+        });
 
-      if (directErr) {
-        setError('Email hoặc mật khẩu không chính xác. Vui lòng thử lại.');
-        setLoading(false);
-      } else {
-        window.location.href = '/';
+        if (directErr) {
+          setError(getFriendlyErrorMessage(directErr, 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.'));
+        } else {
+          window.location.href = '/';
+        }
+      } catch (fallbackErr: unknown) {
+        setError(getFriendlyErrorMessage(fallbackErr, 'Không thể kết nối đến máy chủ. Vui lòng thử lại.'));
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,9 +131,10 @@ export default function LoginPage() {
             <label className="block text-sm font-bold text-gray-700 mb-1">Email</label>
             <input
               type="email"
+              disabled={loading}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800"
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800 disabled:opacity-60"
               placeholder="nhap@email.com"
             />
           </div>
@@ -107,13 +149,16 @@ export default function LoginPage() {
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
+                disabled={loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition pr-10 text-sm text-gray-800"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition pr-10 text-sm text-gray-800 disabled:opacity-60"
                 placeholder="Nhập mật khẩu của bạn"
               />
               <button
                 type="button"
+                tabIndex={-1}
+                disabled={loading}
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                 title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
@@ -130,11 +175,11 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary-600 text-white font-bold py-2.5 rounded-xl hover:bg-primary-700 transition duration-150 disabled:opacity-50 shadow-sm shadow-primary-600/30 flex items-center justify-center gap-2 mt-1"
+            className="w-full bg-primary-600 text-white font-bold py-2.5 px-4 rounded-xl hover:bg-primary-700 transition duration-150 disabled:opacity-50 shadow-sm shadow-primary-600/30 flex items-center justify-center gap-2 mt-2"
           >
             {loading ? (
               <>
-                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -162,7 +207,7 @@ export default function LoginPage() {
             type="button"
             onClick={() => handleLogin(undefined, 'student@demo.com', '123456')}
             disabled={loading}
-            className="w-full flex items-center justify-between px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 bg-gray-50/70 hover:bg-primary-50/60 hover:border-primary-300 font-medium transition group"
+            className="w-full flex items-center justify-between px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 bg-gray-50/70 hover:bg-primary-50/60 hover:border-primary-300 font-medium transition group disabled:opacity-50"
           >
             <div className="flex items-center gap-3">
               <span className="text-xl">👩‍🎓</span>
@@ -180,7 +225,7 @@ export default function LoginPage() {
             type="button"
             onClick={() => handleLogin(undefined, 'teacher@demo.com', '123456')}
             disabled={loading}
-            className="w-full flex items-center justify-between px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 bg-gray-50/70 hover:bg-primary-50/60 hover:border-primary-300 font-medium transition group"
+            className="w-full flex items-center justify-between px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 bg-gray-50/70 hover:bg-primary-50/60 hover:border-primary-300 font-medium transition group disabled:opacity-50"
           >
             <div className="flex items-center gap-3">
               <span className="text-xl">👨‍🏫</span>
@@ -198,7 +243,7 @@ export default function LoginPage() {
             type="button"
             onClick={() => handleLogin(undefined, 'admin@demo.com', '123456')}
             disabled={loading}
-            className="w-full flex items-center justify-between px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 bg-gray-50/70 hover:bg-purple-50 hover:border-purple-300 font-medium transition group"
+            className="w-full flex items-center justify-between px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 bg-gray-50/70 hover:bg-purple-50 hover:border-purple-300 font-medium transition group disabled:opacity-50"
           >
             <div className="flex items-center gap-3">
               <span className="text-xl">🛡️</span>

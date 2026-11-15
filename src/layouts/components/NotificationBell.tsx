@@ -5,43 +5,43 @@ import { useAuth } from '../../hooks/useAuth'
 import { sharedStore, type SharedNotification } from '../../services/sharedStore'
 import type { NotificationItem } from '../../types/notification'
 
+// Định dạng thời gian tương đối
+function formatTimeAgo(dateStr: string): string {
+  try {
+    const past = new Date(dateStr).getTime()
+    const now = Date.now()
+    const diffSec = Math.floor((now - past) / 1000)
+
+    if (diffSec < 60) return 'Vừa xong'
+    const diffMin = Math.floor(diffSec / 60)
+    if (diffMin < 60) return `${diffMin} phút trước`
+    const diffHour = Math.floor(diffMin / 60)
+    if (diffHour < 24) return `${diffHour} giờ trước`
+    const diffDay = Math.floor(diffHour / 24)
+    if (diffDay < 7) return `${diffDay} ngày trước`
+    return new Date(dateStr).toLocaleDateString('vi-VN')
+  } catch {
+    return 'Gần đây'
+  }
+}
+
 export function NotificationBell() {
   const { user, profile, role } = useAuth()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [unreadCount, setUnreadCount] = useState<number>(0)
   const [isOpen, setIsOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
   const currentRole = (profile?.role || role || 'student') as 'student' | 'teacher' | 'admin'
-
-  // Định dạng thời gian tương đối
-  const formatTimeAgo = (dateStr: string) => {
-    try {
-      const past = new Date(dateStr).getTime()
-      const now = Date.now()
-      const diffSec = Math.floor((now - past) / 1000)
-
-      if (diffSec < 60) return 'Vừa xong'
-      const diffMin = Math.floor(diffSec / 60)
-      if (diffMin < 60) return `${diffMin} phút trước`
-      const diffHour = Math.floor(diffMin / 60)
-      if (diffHour < 24) return `${diffHour} giờ trước`
-      const diffDay = Math.floor(diffHour / 24)
-      if (diffDay < 7) return `${diffDay} ngày trước`
-      return new Date(dateStr).toLocaleDateString('vi-VN')
-    } catch {
-      return 'Gần đây'
-    }
-  }
+  const userId = user?.id
 
   // Tải danh sách thông báo của user đang đăng nhập
   const fetchNotifications = useCallback(async () => {
-    setLoading(true)
     try {
       // 1. Lấy thông báo từ sharedStore theo vai trò của người dùng
-      const sharedList = sharedStore.getSharedNotifications(currentRole, user?.id)
+      const sharedList = sharedStore.getSharedNotifications(currentRole, userId)
       let combined: NotificationItem[] = sharedList.map((n) => ({
         id: n.id,
         user_id: n.user_id,
@@ -53,11 +53,11 @@ export function NotificationBell() {
       }))
 
       // 2. Nếu có Supabase, truy vấn thêm từ bảng notifications
-      if (isSupabaseConfigured && user?.id) {
+      if (isSupabaseConfigured && userId) {
         const { data, error } = await supabase
           .from('notifications')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .order('created_at', { ascending: false })
           .limit(20)
 
@@ -77,16 +77,26 @@ export function NotificationBell() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, currentRole])
+  }, [userId, currentRole])
 
   useEffect(() => {
-    fetchNotifications()
+    let active = true
+    const load = async () => {
+      await Promise.resolve()
+      if (!active) return
+      await fetchNotifications()
+    }
+    void load()
+    return () => {
+      active = false
+    }
   }, [fetchNotifications])
 
   // Lắng nghe sự kiện thông báo mới từ hệ thống (khi Admin gửi thông báo)
   useEffect(() => {
-    const handleNewNotification = (e: any) => {
-      const notice: SharedNotification = e.detail
+    const handleNewNotification = (e: Event) => {
+      const customEvent = e as CustomEvent<SharedNotification>
+      const notice: SharedNotification = customEvent.detail
       if (!notice) return
 
       // Kiểm tra đối tượng nhận thông báo (all, students, teachers hoặc đích danh user_id)
@@ -94,7 +104,7 @@ export function NotificationBell() {
         notice.target === 'all' ||
         (currentRole === 'student' && notice.target === 'students') ||
         (currentRole === 'teacher' && notice.target === 'teachers') ||
-        (user?.id && notice.user_id === user.id)
+        (userId && notice.user_id === userId)
 
       if (isTarget) {
         setNotifications((prev) => {
@@ -111,7 +121,7 @@ export function NotificationBell() {
     return () => {
       window.removeEventListener('eduai:new_notification', handleNewNotification)
     }
-  }, [currentRole, user?.id])
+  }, [currentRole, userId])
 
   // Lắng nghe Supabase Realtime qua kênh 'custom-all-channel'
   useEffect(() => {

@@ -1,1 +1,4 @@
-export { StudentLayout, default } from '../../layouts/StudentLayout'
+import { StudentLayout } from '../../layouts/StudentLayout'
+
+export { StudentLayout }
+export default StudentLayout

@@ -26,22 +26,32 @@ export function AITutorChat({ lessonTitle, defaultOpen = false }: AITutorChatPro
       id: 'msg-welcome',
       role: 'assistant',
       text: `Chào bạn! Mình là **Gia sư AI EduAI** 🤖.\n\nBạn đang theo dõi bài học: **${lessonTitle || 'bài học hôm nay'}**.\nNếu có bất kỳ khái niệm khó hiểu, bài tập cần giải thích hoặc muốn tóm tắt ý chính, hãy nhắn cho mình nhé!`,
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      time: 'Vừa xong',
     },
   ])
 
   // Cập nhật lời chào khi bài học thay đổi
+  const prevLessonRef = useRef<string | undefined>(undefined)
   useEffect(() => {
-    if (lessonTitle) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `msg-switch-${Date.now()}`,
-          role: 'assistant',
-          text: `Bạn vừa chuyển sang bài: **${lessonTitle}**. Bạn cần mình hỗ trợ giải đáp nội dung nào của bài này không?`,
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        },
-      ])
+    if (!lessonTitle) return
+    if (prevLessonRef.current === undefined) {
+      prevLessonRef.current = lessonTitle
+      return
+    }
+    if (prevLessonRef.current !== lessonTitle) {
+      prevLessonRef.current = lessonTitle
+      const timer = setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-switch-${Date.now()}`,
+            role: 'assistant',
+            text: `Bạn vừa chuyển sang bài: **${lessonTitle}**. Bạn cần mình hỗ trợ giải đáp nội dung nào của bài này không?`,
+            time: 'Vừa xong',
+          },
+        ])
+      }, 0)
+      return () => clearTimeout(timer)
     }
   }, [lessonTitle])
 

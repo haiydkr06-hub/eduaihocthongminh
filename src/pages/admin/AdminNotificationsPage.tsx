@@ -51,17 +51,23 @@ export function AdminNotificationsPage() {
     }
 
     setSubmitting(true)
-    const success = await adminService.createNotification(title, message, type, target)
-    setSubmitting(false)
+    try {
+      const success = await adminService.createNotification(title, message, type, target)
 
-    if (success) {
-      setNotice('Đã gửi thông báo hệ thống tới các người dùng thành công!')
-      setTitle('')
-      setMessage('')
-      refreshNotifications()
-      setTimeout(() => setNotice(null), 3000)
-    } else {
-      alert('Không thể gửi thông báo')
+      if (success) {
+        setNotice('Đã gửi thông báo hệ thống tới các người dùng thành công!')
+        setTitle('')
+        setMessage('')
+        refreshNotifications()
+        setTimeout(() => setNotice(null), 3000)
+      } else {
+        alert('Không thể gửi thông báo')
+      }
+    } catch (err) {
+      console.error('Lỗi khi gửi thông báo:', err)
+      alert('Đã xảy ra lỗi khi gửi thông báo. Vui lòng thử lại.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -152,7 +158,7 @@ export function AdminNotificationsPage() {
                 </label>
                 <select
                   value={target}
-                  onChange={(e) => setTarget(e.target.value as any)}
+                  onChange={(e) => setTarget(e.target.value as 'all' | 'students' | 'teachers')}
                   className="w-full px-3 py-2 bg-[#f7f8fc] border border-[#eceef4] rounded-xl text-xs focus:outline-none focus:border-[#6857DF]"
                 >
                   <option value="all">Tất cả mọi người</option>
