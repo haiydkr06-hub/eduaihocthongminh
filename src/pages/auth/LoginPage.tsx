@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Sparkles, Mail, Lock, LogIn, AlertCircle } from 'lucide-react'
+import { Sparkles, Mail, Lock, LogIn, AlertCircle, Eye, EyeOff, GraduationCap, UserCheck } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -14,9 +15,8 @@ export function LoginPage() {
   const [searchParams] = useSearchParams()
   const redirectUrl = searchParams.get('redirect')
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!email.trim() || !password) {
+  const performLogin = async (loginEmail: string, loginPass: string) => {
+    if (!loginEmail.trim() || !loginPass) {
       setErrorMsg('Vui lòng nhập đầy đủ email và mật khẩu')
       return
     }
@@ -25,15 +25,22 @@ export function LoginPage() {
     setErrorMsg(null)
 
     try {
-      const { error } = await signIn(email.trim(), password)
+      const { error } = await signIn(loginEmail.trim(), loginPass)
       if (error) {
         setErrorMsg(error.message || 'Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.')
       } else {
         if (redirectUrl) {
           navigate(redirectUrl, { replace: true })
         } else {
-          // Điều hướng mặc định, ProtectedRoute sẽ kiểm tra role cụ thể
-          navigate('/student/dashboard', { replace: true })
+          // Điều hướng dựa vào email hoặc để RootRedirect điều phối
+          const lower = loginEmail.toLowerCase()
+          if (lower.includes('giangvien') || lower.includes('teacher')) {
+            navigate('/teacher/dashboard', { replace: true })
+          } else if (lower.includes('admin')) {
+            navigate('/admin/dashboard', { replace: true })
+          } else {
+            navigate('/student/dashboard', { replace: true })
+          }
         }
       }
     } catch (err: unknown) {
@@ -44,21 +51,36 @@ export function LoginPage() {
     }
   }
 
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    await performLogin(email, password)
+  }
+
+  const handleDemoLogin = async (role: 'student' | 'teacher') => {
+    const demoEmail = role === 'student' ? 'hocsinh@eduai.vn' : 'giangvien@eduai.vn'
+    const demoPass = '123456'
+    setEmail(demoEmail)
+    setPassword(demoPass)
+    await performLogin(demoEmail, demoPass)
+  }
+
   return (
-    <div className="min-h-screen bg-[#f7f8fc] flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-[#eceef4] p-8 md:p-10">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 p-8 sm:p-10">
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#7966f2] to-[#5f4ce0] text-white flex items-center justify-center shadow-lg shadow-[#6653df]/30 mb-4">
+          <div className="w-14 h-14 rounded-2xl bg-primary-600 text-white flex items-center justify-center shadow-lg shadow-primary-600/30 mb-3">
             <Sparkles className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-black text-[#252641] tracking-tight">
-            Edu<span className="text-[#7060e8]">AI</span>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+            Edu<span className="text-primary-600">AI</span>
           </h1>
-          <span className="text-[10px] font-bold text-[#a1a3b5] tracking-widest uppercase mt-0.5">
+          <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mt-0.5">
             HỌC THÔNG MINH
           </span>
-          <p className="text-sm text-[#777a91] mt-3">Đăng nhập vào không gian học tập số</p>
+          <p className="text-sm text-gray-500 mt-2 text-center">
+            Đăng nhập vào không gian học tập số tích hợp AI
+          </p>
         </div>
 
         {errorMsg && (
@@ -69,9 +91,10 @@ export function LoginPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Email input */}
           <div>
-            <label className="block text-xs font-bold text-[#777a91] uppercase tracking-wider mb-2">
-              Email
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+              Email đăng nhập
             </label>
             <div className="relative">
               <Mail className="w-5 h-5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -81,19 +104,20 @@ export function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
-                className="w-full pl-11 pr-4 py-3 bg-[#f7f8fc] border border-[#eceef4] rounded-xl text-sm focus:outline-none focus:border-[#6857DF] focus:bg-white transition"
+                className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 focus:bg-white transition"
               />
             </div>
           </div>
 
+          {/* Password input with show/hide toggle */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold text-[#777a91] uppercase tracking-wider">
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider">
                 Mật khẩu
               </label>
               <Link
                 to="/forgot-password"
-                className="text-xs text-[#6857DF] hover:underline font-medium"
+                className="text-xs text-primary-600 hover:text-primary-700 hover:underline font-medium"
               >
                 Quên mật khẩu?
               </Link>
@@ -101,20 +125,34 @@ export function LoginPage() {
             <div className="relative">
               <Lock className="w-5 h-5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-11 pr-4 py-3 bg-[#f7f8fc] border border-[#eceef4] rounded-xl text-sm focus:outline-none focus:border-[#6857DF] focus:bg-white transition"
+                className="w-full pl-11 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-600/20 focus:border-primary-600 focus:bg-white transition"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              >
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
             </div>
           </div>
 
+          {/* Submit button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-[#6857DF] hover:bg-[#5144BE] text-white font-semibold rounded-xl transition duration-200 shadow-md shadow-[#6857DF]/25 disabled:opacity-50 mt-2"
+            className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition duration-200 shadow-md shadow-primary-600/30 disabled:opacity-50 mt-2"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -126,10 +164,36 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-[#eceef4] text-center">
-          <p className="text-sm text-[#777a91]">
+        {/* 2 Nút Demo Học sinh / Giảng viên */}
+        <div className="mt-6 pt-5 border-t border-gray-100">
+          <p className="text-xs text-center text-gray-500 font-medium mb-3">
+            Hoặc đăng nhập nhanh bằng tài khoản thử nghiệm:
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('student')}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 rounded-xl text-xs font-semibold transition"
+            >
+              <GraduationCap className="w-4 h-4" /> Demo Học sinh
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('teacher')}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-semibold transition"
+            >
+              <UserCheck className="w-4 h-4" /> Demo Giảng viên
+            </button>
+          </div>
+        </div>
+
+        {/* Link to Register */}
+        <div className="mt-6 pt-4 border-t border-gray-100 text-center">
+          <p className="text-sm text-gray-600">
             Chưa có tài khoản?{' '}
-            <Link to="/register" className="text-[#6857DF] font-semibold hover:underline">
+            <Link to="/register" className="text-primary-600 font-semibold hover:underline">
               Đăng ký ngay
             </Link>
           </p>
