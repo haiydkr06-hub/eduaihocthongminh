@@ -7,7 +7,14 @@ import { UnauthorizedPage } from '../pages/error/UnauthorizedPage'
 import { NotFoundPage } from '../pages/error/NotFoundPage'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import { RootRedirect } from '../components/auth/RootRedirect'
+import { StudentLayout } from '../components/layout/StudentLayout'
 import { StudentDashboardPage } from '../pages/student/StudentDashboardPage'
+import { StudentCoursesPage } from '../pages/student/StudentCoursesPage'
+import { StudentLearnPage } from '../pages/student/StudentLearnPage'
+import { StudentQuizPage } from '../pages/student/StudentQuizPage'
+import { StudentSchedulePage } from '../pages/student/StudentSchedulePage'
+import { StudentAchievementsPage } from '../pages/student/StudentAchievementsPage'
+import { StudentProfilePage } from '../pages/student/StudentProfilePage'
 import { TeacherLayout } from '../components/layout/TeacherLayout'
 import { TeacherDashboardPage } from '../pages/teacher/TeacherDashboardPage'
 import { TeacherCoursesPage } from '../pages/teacher/TeacherCoursesPage'
@@ -57,12 +64,41 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute allowedRoles={['student', 'admin']} />,
     children: [
       {
-        path: '',
-        element: <Navigate to="/student/dashboard" replace />,
-      },
-      {
-        path: 'dashboard',
-        element: <StudentDashboardPage />,
+        element: <StudentLayout />,
+        children: [
+          {
+            path: '',
+            element: <Navigate to="/student/dashboard" replace />,
+          },
+          {
+            path: 'dashboard',
+            element: <StudentDashboardPage />,
+          },
+          {
+            path: 'courses',
+            element: <StudentCoursesPage />,
+          },
+          {
+            path: 'learn/:courseId',
+            element: <StudentLearnPage />,
+          },
+          {
+            path: 'quiz/:quizId',
+            element: <StudentQuizPage />,
+          },
+          {
+            path: 'schedule',
+            element: <StudentSchedulePage />,
+          },
+          {
+            path: 'achievements',
+            element: <StudentAchievementsPage />,
+          },
+          {
+            path: 'profile',
+            element: <StudentProfilePage />,
+          },
+        ],
       },
     ],
   },
