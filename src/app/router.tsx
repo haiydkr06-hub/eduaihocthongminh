@@ -26,6 +26,7 @@ import { TeacherAiQuizPage } from '../pages/teacher/TeacherAiQuizPage'
 import { TeacherGradingPage } from '../pages/teacher/TeacherGradingPage'
 import { TeacherAnalyticsPage } from '../pages/teacher/TeacherAnalyticsPage'
 import { TeacherProfilePage } from '../pages/teacher/TeacherProfilePage'
+import { TeacherNotificationsPage } from '../pages/teacher/TeacherNotificationsPage'
 import { AdminLayout } from '../components/layout/AdminLayout'
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage'
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage'
@@ -164,6 +165,10 @@ export const router = createBrowserRouter([
           {
             path: 'analytics',
             element: <TeacherAnalyticsPage />,
+          },
+          {
+            path: 'notifications',
+            element: <TeacherNotificationsPage />,
           },
           {
             path: 'profile',

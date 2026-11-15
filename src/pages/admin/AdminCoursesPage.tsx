@@ -37,8 +37,15 @@ export function AdminCoursesPage() {
           setLoading(false)
         }
       })
+
+    const handleUpdate = () => {
+      refreshCourses()
+    }
+    window.addEventListener('eduai:courses_updated', handleUpdate)
+
     return () => {
       active = false
+      window.removeEventListener('eduai:courses_updated', handleUpdate)
     }
   }, [])
 

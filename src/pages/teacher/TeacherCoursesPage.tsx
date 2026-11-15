@@ -57,8 +57,15 @@ export function TeacherCoursesPage() {
           setLoading(false)
         }
       })
+
+    const handleUpdate = () => {
+      loadCourses()
+    }
+    window.addEventListener('eduai:courses_updated', handleUpdate)
+
     return () => {
       active = false
+      window.removeEventListener('eduai:courses_updated', handleUpdate)
     }
   }, [profile?.id])
 
@@ -75,7 +82,7 @@ export function TeacherCoursesPage() {
     setCreating(false)
 
     if (created) {
-      setNotice(`Đã tạo khóa học "${newTitle}" thành công!`)
+      setNotice(`Đã tạo khóa học "${newTitle}" thành công! Khóa học đã được gửi tới Quản trị viên để duyệt xuất bản.`)
       setShowCreateModal(false)
       setNewTitle('')
       setNewDescription('')
@@ -163,8 +170,8 @@ export function TeacherCoursesPage() {
                       <CheckCircle className="w-3 h-3" /> Đã xuất bản
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                      <XCircle className="w-3 h-3" /> Bản nháp
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                      <XCircle className="w-3 h-3 text-amber-600" /> Chờ duyệt / Bản nháp
                     </span>
                   )}
                 </div>

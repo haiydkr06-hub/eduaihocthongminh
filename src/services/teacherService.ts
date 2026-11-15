@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured, withTimeout } from '../lib/supabase'
+import { sharedStore } from './sharedStore'
 
 export interface TeacherStats {
   totalCourses: number
@@ -62,7 +63,7 @@ export interface StudentSubmission {
   status: 'pending' | 'graded'
 }
 
-const fallbackCourses: TeacherCourse[] = [
+export const fallbackCourses: TeacherCourse[] = [
   {
     id: 'tc-1',
     title: 'Toán học tư duy bậc THPT',
@@ -136,8 +137,18 @@ export const teacherService = {
   },
 
   async getCourses(teacherId?: string): Promise<TeacherCourse[]> {
+    const shared = sharedStore.getSharedCourses()
     if (!isSupabaseConfigured) {
-      return fallbackCourses
+      return shared.map((c) => ({
+        id: c.id,
+        title: c.title,
+        category: c.category,
+        status: c.status,
+        lessonsCount: c.lessons_count || 0,
+        studentsCount: c.students_count || 0,
+        createdAt: c.created_at,
+        description: c.description || '',
+      }))
     }
 
     try {
@@ -148,7 +159,7 @@ export const teacherService = {
       const { data, error } = await withTimeout(query, 2500)
 
       if (!error && data && data.length > 0) {
-        return data.map((c: any) => ({
+        const sbCourses = data.map((c: any) => ({
           id: c.id,
           title: c.title,
           category: c.category || 'Môn học',
@@ -158,15 +169,58 @@ export const teacherService = {
           createdAt: c.created_at,
           description: c.description || '',
         }))
+
+        // Gộp các khóa học từ sharedStore (tránh trùng id)
+        const sbIds = new Set(sbCourses.map((c: any) => c.id))
+        const extras = shared
+          .filter((c) => !sbIds.has(c.id))
+          .map((c) => ({
+            id: c.id,
+            title: c.title,
+            category: c.category,
+            status: c.status,
+            lessonsCount: c.lessons_count || 0,
+            studentsCount: c.students_count || 0,
+            createdAt: c.created_at,
+            description: c.description || '',
+          }))
+
+        return [...extras, ...sbCourses]
       }
     } catch {
       // fallback demo data
     }
 
-    return fallbackCourses
+    return shared.map((c) => ({
+      id: c.id,
+      title: c.title,
+      category: c.category,
+      status: c.status,
+      lessonsCount: c.lessons_count || 0,
+      studentsCount: c.students_count || 0,
+      createdAt: c.created_at,
+      description: c.description || '',
+    }))
   },
 
   async createCourse(teacherId: string, course: { title: string; category: string; description: string }): Promise<TeacherCourse | null> {
+    // 1. Lưu vào sharedStore trước để Admin thấy ngay lập tức trên Bảng điều khiển duyệt khóa học
+    const saved = sharedStore.addSharedCourse({
+      title: course.title,
+      category: course.category,
+      description: course.description,
+      teacher_id: teacherId,
+    })
+
+    // 2. Tự động gửi thông báo cho Quản trị viên duyệt khóa học mới
+    sharedStore.addSharedNotification({
+      title: 'Khóa học mới chờ phê duyệt',
+      message: `Giảng viên vừa tạo khóa học "${course.title}". Vui lòng kiểm tra và duyệt xuất bản.`,
+      type: 'info',
+      target: 'all',
+    })
+
+    // 3. Nếu đã cấu hình Supabase, lưu thêm vào cơ sở dữ liệu
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await withTimeout(
@@ -196,20 +250,20 @@ export const teacherService = {
             description: data.description,
           }
         }
-      } catch {
-        // local fallback creation
+      } catch (err) {
+        console.warn('Lỗi tạo khóa học trên Supabase:', err)
       }
     }
 
     return {
-      id: `tc-${Date.now()}`,
-      title: course.title,
-      category: course.category,
-      status: 'draft',
+      id: saved.id,
+      title: saved.title,
+      category: saved.category,
+      status: saved.status,
       lessonsCount: 0,
       studentsCount: 0,
-      createdAt: new Date().toISOString(),
-      description: course.description,
+      createdAt: saved.created_at,
+      description: saved.description,
     }
   },
 

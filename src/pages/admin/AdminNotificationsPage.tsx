@@ -51,7 +51,7 @@ export function AdminNotificationsPage() {
     }
 
     setSubmitting(true)
-    const success = await adminService.createNotification(title, message, type)
+    const success = await adminService.createNotification(title, message, type, target)
     setSubmitting(false)
 
     if (success) {

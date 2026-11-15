@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured, withTimeout } from '../lib/supabase'
+import { sharedStore } from './sharedStore'
 
 export interface StudentDashboardStats {
   enrolledCoursesCount: number
@@ -262,8 +263,24 @@ export const studentService = {
   },
 
   async getAllAvailableCourses(): Promise<StudentCourseItem[]> {
+    const sharedPublished = sharedStore.getSharedCourses().filter((c) => c.status === 'published')
+    const mappedShared: StudentCourseItem[] = sharedPublished.map((c, idx) => ({
+      id: c.id,
+      title: c.title,
+      category: c.category || 'Môn học',
+      instructor: c.instructor_name || 'Giảng viên',
+      progress: 0,
+      lessonsCompleted: 0,
+      totalLessons: c.lessons_count || 15,
+      accent: idx % 3 === 0 ? 'lavender' : idx % 3 === 1 ? 'mint' : 'peach',
+      illustration: idx % 3 === 0 ? '∑' : idx % 3 === 1 ? '✳' : 'A',
+      status: 'Đang học',
+      description: c.description || 'Khóa học chất lượng cao trên EduAI',
+      isEnrolled: false,
+    }))
+
     if (!isSupabaseConfigured) {
-      return fallbackAvailableCourses
+      return mappedShared.length > 0 ? mappedShared : fallbackAvailableCourses
     }
 
     try {
@@ -283,7 +300,7 @@ export const studentService = {
       )
 
       if (data && data.length > 0) {
-        return data.map((c: any, idx: number) => ({
+        const sbCourses: StudentCourseItem[] = data.map((c: any, idx: number) => ({
           id: c.id,
           title: c.title,
           category: c.category || 'Môn học',
@@ -293,16 +310,20 @@ export const studentService = {
           totalLessons: c.lessons?.length || 15,
           accent: idx % 3 === 0 ? 'lavender' : idx % 3 === 1 ? 'mint' : 'peach',
           illustration: idx % 3 === 0 ? '∑' : idx % 3 === 1 ? '✳' : 'A',
-          status: 'Đang học',
+          status: 'Đang học' as const,
           description: c.description || 'Khóa học chất lượng cao trên EduAI',
           isEnrolled: false,
         }))
+
+        const sbIds = new Set(sbCourses.map((c) => c.id))
+        const extras = mappedShared.filter((c) => !sbIds.has(c.id))
+        return [...extras, ...sbCourses]
       }
     } catch {
       // fallback
     }
 
-    return fallbackAvailableCourses
+    return mappedShared.length > 0 ? mappedShared : fallbackAvailableCourses
   },
 
   async enrollCourse(studentId: string, courseId: string): Promise<boolean> {

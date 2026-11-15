@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { sharedStore, type SharedNotification } from '../../services/sharedStore'
 import type { NotificationItem } from '../../types/notification'
 
 export function StudentNotificationsPage() {
@@ -10,54 +11,35 @@ export function StudentNotificationsPage() {
   const [loading, setLoading] = useState(false)
 
   const fetchNotifications = useCallback(async () => {
-    if (!user?.id) return
-
     setLoading(true)
     try {
-      if (isSupabaseConfigured) {
+      const shared = sharedStore.getSharedNotifications('student', user?.id)
+      let combined: NotificationItem[] = shared.map((n) => ({
+        id: n.id,
+        user_id: n.user_id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        is_read: n.is_read,
+        created_at: n.created_at,
+      }))
+
+      if (isSupabaseConfigured && user?.id) {
         const { data, error } = await supabase
           .from('notifications')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
 
-        if (!error && data) {
-          setNotifications(data as NotificationItem[])
-          return
+        if (!error && data && data.length > 0) {
+          const sbNotices = data as NotificationItem[]
+          const existingIds = new Set(sbNotices.map((n) => n.id))
+          const nonDupes = combined.filter((n) => !existingIds.has(n.id))
+          combined = [...sbNotices, ...nonDupes]
         }
       }
 
-      // Dữ liệu mẫu ban đầu
-      const fallbackList: NotificationItem[] = [
-        {
-          id: 'n-mock-1',
-          user_id: user.id,
-          title: 'Chào mừng bạn đến với EduAI',
-          message: 'Bắt đầu lộ trình học thông minh cùng các khóa học chất lượng cao và Trợ lý AI.',
-          type: 'info',
-          is_read: false,
-          created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-        },
-        {
-          id: 'n-mock-2',
-          user_id: user.id,
-          title: 'Nhắc nhở buổi học',
-          message: 'Bạn có lịch học Toán tư duy vào lúc 15:30 chiều nay.',
-          type: 'warning',
-          is_read: false,
-          created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        },
-        {
-          id: 'n-mock-3',
-          user_id: user.id,
-          title: 'Huy hiệu thành tích mới',
-          message: 'Chúc mừng bạn vừa đạt huy hiệu Chăm chỉ tuần này!',
-          type: 'success',
-          is_read: true,
-          created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        },
-      ]
-      setNotifications(fallbackList)
+      setNotifications(combined)
     } catch (err) {
       console.warn('Lỗi fetch notifications:', err)
     } finally {
@@ -68,6 +50,25 @@ export function StudentNotificationsPage() {
   useEffect(() => {
     fetchNotifications()
   }, [fetchNotifications])
+
+  // Lắng nghe sự kiện thông báo mới từ hệ thống (CustomEvent)
+  useEffect(() => {
+    const handleNew = (e: any) => {
+      const notice: SharedNotification = e.detail
+      if (!notice) return
+      if (notice.target === 'all' || notice.target === 'students' || (user?.id && notice.user_id === user.id)) {
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === notice.id)) return prev
+          return [notice, ...prev]
+        })
+      }
+    }
+
+    window.addEventListener('eduai:new_notification', handleNew)
+    return () => {
+      window.removeEventListener('eduai:new_notification', handleNew)
+    }
+  }, [user?.id])
 
   // Lắng nghe Realtime qua kênh 'custom-all-channel'
   useEffect(() => {
@@ -101,6 +102,8 @@ export function StudentNotificationsPage() {
       prev.map((n) => (n.id === noticeId ? { ...n, is_read: true } : n))
     )
 
+    sharedStore.markSharedNotificationRead(noticeId)
+
     if (isSupabaseConfigured) {
       try {
         await supabase
@@ -115,6 +118,8 @@ export function StudentNotificationsPage() {
 
   const handleMarkAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
+
+    sharedStore.markAllSharedNotificationsRead('student')
 
     if (isSupabaseConfigured && user?.id) {
       try {
@@ -143,7 +148,7 @@ export function StudentNotificationsPage() {
             Thông báo của bạn
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            Cập nhật tin tức khóa học, nhắc nhở bài tập và thông báo quan trọng từ hệ thống.
+            Cập nhật tin tức khóa học, thông báo từ Quản trị viên và hệ thống EduAI.
           </p>
         </div>
 

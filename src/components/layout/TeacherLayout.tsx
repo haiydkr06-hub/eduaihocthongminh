@@ -13,8 +13,10 @@ import {
   Menu,
   X,
   ExternalLink,
+  Bell,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { NotificationBell } from '../../layouts/components/NotificationBell'
 
 const teacherNavItems = [
   { path: '/teacher/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
@@ -24,6 +26,7 @@ const teacherNavItems = [
   { path: '/teacher/ai-quiz', label: 'Soạn Quiz bằng AI', icon: Sparkles },
   { path: '/teacher/grading', label: 'Chấm điểm & Nhận xét', icon: GraduationCap },
   { path: '/teacher/analytics', label: 'Thống kê giảng dạy', icon: BarChart3 },
+  { path: '/teacher/notifications', label: 'Thông báo', icon: Bell },
   { path: '/teacher/profile', label: 'Hồ sơ cá nhân', icon: User },
 ]
 
@@ -174,9 +177,10 @@ export function TeacherLayout() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
+            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 hidden sm:inline-block">
               Instructor Hub
             </span>
+            <NotificationBell />
             <div className="w-8 h-8 rounded-full bg-[#6857DF] text-white flex items-center justify-center font-bold text-xs shadow-sm">
               {teacherInitials}
             </div>

@@ -27,6 +27,7 @@ import { TeacherAiQuizPage } from './pages/teacher/TeacherAiQuizPage'
 import { TeacherGradingPage } from './pages/teacher/TeacherGradingPage'
 import { TeacherAnalyticsPage } from './pages/teacher/TeacherAnalyticsPage'
 import { TeacherProfilePage } from './pages/teacher/TeacherProfilePage'
+import { TeacherNotificationsPage } from './pages/teacher/TeacherNotificationsPage'
 import { AdminLayout } from './components/layout/AdminLayout'
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage'
 import { AdminUsersPage } from './pages/admin/AdminUsersPage'
@@ -84,6 +85,7 @@ export default function App() {
               <Route path="ai-quiz" element={<TeacherAiQuizPage />} />
               <Route path="grading" element={<TeacherGradingPage />} />
               <Route path="analytics" element={<TeacherAnalyticsPage />} />
+              <Route path="notifications" element={<TeacherNotificationsPage />} />
               <Route path="profile" element={<TeacherProfilePage />} />
             </Route>
           </Route>

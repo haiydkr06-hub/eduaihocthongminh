@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured, withTimeout } from '../lib/supabase'
+import { sharedStore } from './sharedStore'
 import type { AppRole, Profile } from '../types/auth'
 
 export interface AdminStats {
@@ -62,7 +63,7 @@ const demoProfiles: Profile[] = [
   { id: '8', email: 'hocvien4@eduai.vn', full_name: 'Phạm Quỳnh Trang', role: 'student', created_at: '2026-03-25' },
 ]
 
-const fallbackCoursesList: AdminCourseItem[] = [
+export const fallbackCoursesList: AdminCourseItem[] = [
   {
     id: 'c-1',
     title: 'Toán học tư duy bậc THPT',
@@ -152,7 +153,7 @@ const fallbackQuizzesList: AdminQuizItem[] = [
   },
 ]
 
-const fallbackNotificationsList: SystemNotificationItem[] = [
+export const fallbackNotificationsList: SystemNotificationItem[] = [
   {
     id: 'n-1',
     title: 'Bảo trì hệ thống định kỳ',
@@ -284,12 +285,22 @@ export const adminService = {
   },
 
   async getCourses(): Promise<AdminCourseItem[]> {
+    const shared = sharedStore.getSharedCourses()
     if (!isSupabaseConfigured) {
-      return fallbackCoursesList
+      return shared.map((c) => ({
+        id: c.id,
+        title: c.title,
+        category: c.category,
+        instructor_name: c.instructor_name || 'Giảng viên',
+        lessons_count: c.lessons_count || 12,
+        students_count: c.students_count || 0,
+        status: c.status,
+        created_at: c.created_at,
+      }))
     }
 
     try {
-      const { data, error } = await withTimeout(
+      const { data } = await withTimeout(
         supabase
           .from('courses')
           .select(`
@@ -304,38 +315,79 @@ export const adminService = {
         2500
       )
 
-      if (error || !data || data.length === 0) {
-        return fallbackCoursesList
-      }
+      if (data && data.length > 0) {
+        const sbCourses = data.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          category: item.category || 'Tổng hợp',
+          instructor_name: item.profiles?.full_name || 'Giảng viên',
+          lessons_count: 12,
+          students_count: 35,
+          status: item.status || 'draft',
+          created_at: item.created_at,
+        }))
 
-      return data.map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        category: item.category || 'Tổng hợp',
-        instructor_name: item.profiles?.full_name || 'Giảng viên',
-        lessons_count: 12,
-        students_count: 35,
-        status: item.status || 'draft',
-        created_at: item.created_at,
-      }))
+        // Gộp các khóa học tạo từ sharedStore (tránh trùng id)
+        const sbIds = new Set(sbCourses.map((c: any) => c.id))
+        const extras = shared
+          .filter((c) => !sbIds.has(c.id))
+          .map((c) => ({
+            id: c.id,
+            title: c.title,
+            category: c.category,
+            instructor_name: c.instructor_name || 'Giảng viên',
+            lessons_count: c.lessons_count || 0,
+            students_count: 0,
+            status: c.status,
+            created_at: c.created_at,
+          }))
+
+        return [...extras, ...sbCourses]
+      }
     } catch {
-      return fallbackCoursesList
+      // fallback
     }
+
+    return shared.map((c) => ({
+      id: c.id,
+      title: c.title,
+      category: c.category,
+      instructor_name: c.instructor_name || 'Giảng viên',
+      lessons_count: c.lessons_count || 12,
+      students_count: c.students_count || 0,
+      status: c.status,
+      created_at: c.created_at,
+    }))
   },
 
   async updateCourseStatus(courseId: string, status: 'draft' | 'published' | 'archived'): Promise<boolean> {
+    // 1. Cập nhật vào sharedStore trước để đảm bảo tính nhất quán
+    sharedStore.updateSharedCourseStatus(courseId, status)
+
+    // 2. Tự động gửi thông báo cho Giảng viên về kết quả duyệt khóa học
+    const allCourses = sharedStore.getSharedCourses()
+    const targetCourse = allCourses.find((c) => c.id === courseId)
+    const courseTitle = targetCourse ? targetCourse.title : 'của bạn'
+    
+    sharedStore.addSharedNotification({
+      title: status === 'published' ? 'Khóa học đã được phê duyệt!' : 'Khóa học chuyển về bản nháp',
+      message: `Khóa học "${courseTitle}" đã được Quản trị viên ${status === 'published' ? 'phê duyệt và chính thức xuất bản trên hệ thống.' : 'thu hồi về trạng thái bản nháp.'}`,
+      type: status === 'published' ? 'success' : 'warning',
+      target: 'teachers',
+      user_id: targetCourse?.teacher_id,
+    })
+
     if (isSupabaseConfigured) {
       try {
-        const { error } = await withTimeout(
+        await withTimeout(
           supabase
             .from('courses')
             .update({ status, updated_at: new Date().toISOString() })
             .eq('id', courseId),
           2500
         )
-        return !error
-      } catch {
-        return false
+      } catch (err) {
+        console.warn('Lỗi cập nhật trạng thái khóa học Supabase:', err)
       }
     }
     return true
@@ -382,12 +434,20 @@ export const adminService = {
   },
 
   async getNotifications(): Promise<SystemNotificationItem[]> {
+    const shared = sharedStore.getSharedNotifications('admin')
     if (!isSupabaseConfigured) {
-      return fallbackNotificationsList
+      return shared.map((n) => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.type || 'info',
+        created_at: n.created_at,
+        target: (n.target || 'all') as 'all' | 'students' | 'teachers',
+      }))
     }
 
     try {
-      const { data, error } = await withTimeout(
+      const { data } = await withTimeout(
         supabase
           .from('notifications')
           .select('*')
@@ -395,29 +455,69 @@ export const adminService = {
         2500
       )
 
-      if (error || !data || data.length === 0) {
-        return fallbackNotificationsList
+      if (data && data.length > 0) {
+        const sbNotices: SystemNotificationItem[] = data.map((n: any) => ({
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          type: n.type || 'info',
+          created_at: n.created_at,
+          target: (n.target || 'all') as 'all' | 'students' | 'teachers',
+        }))
+
+        const sbIds = new Set(sbNotices.map((n) => n.id))
+        const extras: SystemNotificationItem[] = shared
+          .filter((n) => !sbIds.has(n.id))
+          .map((n) => ({
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            type: n.type || 'info',
+            created_at: n.created_at,
+            target: (n.target || 'all') as 'all' | 'students' | 'teachers',
+          }))
+
+        return [...extras, ...sbNotices]
       }
-      return data.map((n: any) => ({
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        type: n.type || 'info',
-        created_at: n.created_at,
-        target: 'all',
-      }))
     } catch {
-      return fallbackNotificationsList
+      // fallback
     }
+
+    return shared.map((n) => ({
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      type: n.type || 'info',
+      created_at: n.created_at,
+      target: (n.target || 'all') as 'all' | 'students' | 'teachers',
+    }))
   },
 
-  async createNotification(title: string, message: string, type = 'info'): Promise<boolean> {
+  async createNotification(
+    title: string,
+    message: string,
+    type = 'info',
+    target: 'all' | 'students' | 'teachers' = 'all'
+  ): Promise<boolean> {
+    // 1. Luôn lưu vào sharedStore để tất cả các tài khoản demo (học viên / giảng viên) nhận được ngay lập tức
+    sharedStore.addSharedNotification({
+      title,
+      message,
+      type,
+      target,
+    })
+
+    // 2. Nếu có Supabase, gửi thêm vào cơ sở dữ liệu
     if (isSupabaseConfigured) {
       try {
-        const { data: profiles } = await withTimeout(
-          supabase.from('profiles').select('id'),
-          2500
-        )
+        let query = supabase.from('profiles').select('id, role')
+        if (target === 'students') {
+          query = query.eq('role', 'student')
+        } else if (target === 'teachers') {
+          query = query.eq('role', 'teacher')
+        }
+
+        const { data: profiles } = await withTimeout(query, 2500)
         if (profiles && profiles.length > 0) {
           const rows = profiles.map((p: any) => ({
             user_id: p.id,
@@ -427,11 +527,11 @@ export const adminService = {
           }))
           await withTimeout(supabase.from('notifications').insert(rows), 2500)
         }
-        return true
-      } catch {
-        return true
+      } catch (err) {
+        console.warn('Lỗi gửi thông báo qua Supabase:', err)
       }
     }
+
     return true
   },
 }

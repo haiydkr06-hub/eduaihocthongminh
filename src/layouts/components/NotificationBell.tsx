@@ -2,16 +2,19 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { sharedStore, type SharedNotification } from '../../services/sharedStore'
 import type { NotificationItem } from '../../types/notification'
 
 export function NotificationBell() {
-  const { user } = useAuth()
+  const { user, profile, role } = useAuth()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [unreadCount, setUnreadCount] = useState<number>(0)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+
+  const currentRole = (profile?.role || role || 'student') as 'student' | 'teacher' | 'admin'
 
   // Định dạng thời gian tương đối
   const formatTimeAgo = (dateStr: string) => {
@@ -35,11 +38,22 @@ export function NotificationBell() {
 
   // Tải danh sách thông báo của user đang đăng nhập
   const fetchNotifications = useCallback(async () => {
-    if (!user?.id) return
-
     setLoading(true)
     try {
-      if (isSupabaseConfigured) {
+      // 1. Lấy thông báo từ sharedStore theo vai trò của người dùng
+      const sharedList = sharedStore.getSharedNotifications(currentRole, user?.id)
+      let combined: NotificationItem[] = sharedList.map((n) => ({
+        id: n.id,
+        user_id: n.user_id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        is_read: n.is_read,
+        created_at: n.created_at,
+      }))
+
+      // 2. Nếu có Supabase, truy vấn thêm từ bảng notifications
+      if (isSupabaseConfigured && user?.id) {
         const { data, error } = await supabase
           .from('notifications')
           .select('*')
@@ -47,56 +61,57 @@ export function NotificationBell() {
           .order('created_at', { ascending: false })
           .limit(20)
 
-        if (!error && data) {
-          setNotifications(data as NotificationItem[])
-          const unread = (data as NotificationItem[]).filter((n) => !n.is_read).length
-          setUnreadCount(unread)
-          return
+        if (!error && data && data.length > 0) {
+          const sbNotices = data as NotificationItem[]
+          const existingIds = new Set(sbNotices.map((n) => n.id))
+          const nonDupes = combined.filter((n) => !existingIds.has(n.id))
+          combined = [...sbNotices, ...nonDupes]
         }
       }
 
-      // Dữ liệu mẫu ban đầu nếu offline hoặc chưa có bản ghi
-      const fallbackList: NotificationItem[] = [
-        {
-          id: 'n-mock-1',
-          user_id: user.id,
-          title: 'Chào mừng bạn đến với EduAI',
-          message: 'Bắt đầu lộ trình học thông minh cùng các khóa học chất lượng cao và Trợ lý AI.',
-          type: 'info',
-          is_read: false,
-          created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-        },
-        {
-          id: 'n-mock-2',
-          user_id: user.id,
-          title: 'Nhắc nhở buổi học',
-          message: 'Bạn có lịch học Toán tư duy vào lúc 15:30 chiều nay.',
-          type: 'warning',
-          is_read: false,
-          created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        },
-        {
-          id: 'n-mock-3',
-          user_id: user.id,
-          title: 'Huy hiệu thành tích mới',
-          message: 'Chúc mừng bạn vừa đạt huy hiệu Chăm chỉ tuần này!',
-          type: 'success',
-          is_read: true,
-          created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        },
-      ]
-      setNotifications(fallbackList)
-      setUnreadCount(fallbackList.filter((n) => !n.is_read).length)
+      setNotifications(combined)
+      const unread = combined.filter((n) => !n.is_read).length
+      setUnreadCount(unread)
     } catch (err) {
       console.warn('Lỗi khi fetch thông báo:', err)
     } finally {
       setLoading(false)
     }
-  }, [user?.id])
+  }, [user?.id, currentRole])
 
   useEffect(() => {
     fetchNotifications()
   }, [fetchNotifications])
+
+  // Lắng nghe sự kiện thông báo mới từ hệ thống (khi Admin gửi thông báo)
+  useEffect(() => {
+    const handleNewNotification = (e: any) => {
+      const notice: SharedNotification = e.detail
+      if (!notice) return
+
+      // Kiểm tra đối tượng nhận thông báo (all, students, teachers hoặc đích danh user_id)
+      const isTarget =
+        notice.target === 'all' ||
+        (currentRole === 'student' && notice.target === 'students') ||
+        (currentRole === 'teacher' && notice.target === 'teachers') ||
+        (user?.id && notice.user_id === user.id)
+
+      if (isTarget) {
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === notice.id)) return prev
+          return [notice, ...prev]
+        })
+        if (!notice.is_read) {
+          setUnreadCount((prev) => prev + 1)
+        }
+      }
+    }
+
+    window.addEventListener('eduai:new_notification', handleNewNotification)
+    return () => {
+      window.removeEventListener('eduai:new_notification', handleNewNotification)
+    }
+  }, [currentRole, user?.id])
 
   // Lắng nghe Supabase Realtime qua kênh 'custom-all-channel'
   useEffect(() => {
@@ -113,7 +128,6 @@ export function NotificationBell() {
         },
         (payload) => {
           const newNotice = payload.new as NotificationItem
-          // Chỉ cập nhật nếu thông báo gửi đến user này hoặc thông báo chung
           if (!newNotice.user_id || newNotice.user_id === user?.id) {
             setNotifications((prev) => {
               if (prev.some((item) => item.id === newNotice.id)) return prev
@@ -154,6 +168,10 @@ export function NotificationBell() {
     )
     setUnreadCount((prev) => Math.max(0, prev - 1))
 
+    // Lưu vào sharedStore
+    sharedStore.markSharedNotificationRead(notice.id)
+
+    // Cập nhật lên Supabase nếu có
     if (isSupabaseConfigured) {
       try {
         await supabase
@@ -171,6 +189,10 @@ export function NotificationBell() {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
     setUnreadCount(0)
 
+    // Lưu vào sharedStore
+    sharedStore.markAllSharedNotificationsRead(currentRole)
+
+    // Cập nhật lên Supabase nếu có
     if (isSupabaseConfigured && user?.id) {
       try {
         await supabase
@@ -194,6 +216,15 @@ export function NotificationBell() {
         return <span className="p-1.5 rounded-lg bg-red-50 text-red-600">🔔</span>
       default:
         return <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">📢</span>
+    }
+  }
+
+  const handleNavigateAll = () => {
+    setIsOpen(false)
+    if (currentRole === 'teacher') {
+      navigate('/teacher/notifications')
+    } else {
+      navigate('/student/notifications')
     }
   }
 
@@ -222,7 +253,7 @@ export function NotificationBell() {
 
       {/* Dropdown Danh Sách Thông Báo */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-gray-200/90 overflow-hidden z-50 animate-fade-in">
+        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-gray-200/90 overflow-hidden z-50 animate-fade-in text-gray-900">
           {/* Header */}
           <div className="p-3.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
             <div className="flex items-center gap-2">
@@ -281,7 +312,7 @@ export function NotificationBell() {
                 <div className="text-2xl mb-1">🔔</div>
                 <p className="text-xs font-semibold text-gray-700">Chưa có thông báo nào</p>
                 <p className="text-[11px] text-gray-400 mt-1">
-                  Các thông báo từ giáo viên và hệ thống sẽ xuất hiện tại đây.
+                  Các thông báo từ hệ thống và khóa học sẽ xuất hiện tại đây.
                 </p>
               </div>
             )}
@@ -291,10 +322,7 @@ export function NotificationBell() {
           <div className="p-2.5 border-t border-gray-100 bg-gray-50 text-center">
             <button
               type="button"
-              onClick={() => {
-                setIsOpen(false)
-                navigate('/student/notifications')
-              }}
+              onClick={handleNavigateAll}
               className="text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline"
             >
               Xem tất cả thông báo →
