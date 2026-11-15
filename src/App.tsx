@@ -7,6 +7,7 @@ import { ResetPasswordPage } from './pages/auth/ResetPasswordPage'
 import { UnauthorizedPage } from './pages/error/UnauthorizedPage'
 import { NotFoundPage } from './pages/error/NotFoundPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
+import { RootRedirect } from './components/auth/RootRedirect'
 import { StudentLayout } from './components/layout/StudentLayout'
 import { StudentDashboardPage } from './pages/student/StudentDashboardPage'
 import { StudentCoursesPage } from './pages/student/StudentCoursesPage'
@@ -40,8 +41,8 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Cấu hình route mặc định / tạm thời chuyển hướng về /login */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          {/* Cấu hình route mặc định dựa theo vai trò tài khoản */}
+          <Route path="/" element={<RootRedirect />} />
 
           {/* Authentication Routes */}
           <Route path="/login" element={<LoginPage />} />
