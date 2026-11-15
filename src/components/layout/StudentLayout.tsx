@@ -58,6 +58,7 @@ const studentNavLinks: { path: string; label: string; icon: IconName }[] = [
   { path: '/student/courses', label: 'Khóa học của tôi', icon: 'book' },
   { path: '/student/schedule', label: 'Lịch học', icon: 'calendar' },
   { path: '/student/achievements', label: 'Thành tích', icon: 'trophy' },
+  { path: '/student/ai-assistant', label: 'Trợ lý AI học tập', icon: 'sparkles' },
 ]
 
 export function StudentLayout() {
@@ -136,7 +137,7 @@ export function StudentLayout() {
           <div className="help-spark"><Icon name="sparkles" size={19} /></div>
           <strong>Học cùng AI</strong>
           <p>Khám phá cách học phù hợp nhất với bạn.</p>
-          <button onClick={() => navigate('/student/courses')}>
+          <button onClick={() => navigate('/student/ai-assistant')}>
             Khám phá ngay <Icon name="arrow" size={15} />
           </button>
           <span className="help-orbit orbit-one" />

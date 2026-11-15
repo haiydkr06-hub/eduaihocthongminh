@@ -21,6 +21,7 @@ const teacherNavItems = [
   { path: '/teacher/courses', label: 'Khóa học của tôi', icon: BookOpen },
   { path: '/teacher/classes', label: 'Lớp học & Học viên', icon: Users },
   { path: '/teacher/quizzes', label: 'Bài tập & Kiểm tra', icon: ClipboardCheck },
+  { path: '/teacher/ai-quiz', label: 'Soạn Quiz bằng AI', icon: Sparkles },
   { path: '/teacher/grading', label: 'Chấm điểm & Nhận xét', icon: GraduationCap },
   { path: '/teacher/analytics', label: 'Thống kê giảng dạy', icon: BarChart3 },
   { path: '/teacher/profile', label: 'Hồ sơ cá nhân', icon: User },

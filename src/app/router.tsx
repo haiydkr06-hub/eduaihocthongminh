@@ -15,11 +15,13 @@ import { StudentQuizPage } from '../pages/student/StudentQuizPage'
 import { StudentSchedulePage } from '../pages/student/StudentSchedulePage'
 import { StudentAchievementsPage } from '../pages/student/StudentAchievementsPage'
 import { StudentProfilePage } from '../pages/student/StudentProfilePage'
+import { StudentAiAssistantPage } from '../pages/student/StudentAiAssistantPage'
 import { TeacherLayout } from '../components/layout/TeacherLayout'
 import { TeacherDashboardPage } from '../pages/teacher/TeacherDashboardPage'
 import { TeacherCoursesPage } from '../pages/teacher/TeacherCoursesPage'
 import { TeacherClassesPage } from '../pages/teacher/TeacherClassesPage'
 import { TeacherQuizzesPage } from '../pages/teacher/TeacherQuizzesPage'
+import { TeacherAiQuizPage } from '../pages/teacher/TeacherAiQuizPage'
 import { TeacherGradingPage } from '../pages/teacher/TeacherGradingPage'
 import { TeacherAnalyticsPage } from '../pages/teacher/TeacherAnalyticsPage'
 import { TeacherProfilePage } from '../pages/teacher/TeacherProfilePage'
@@ -98,6 +100,10 @@ export const router = createBrowserRouter([
             path: 'profile',
             element: <StudentProfilePage />,
           },
+          {
+            path: 'ai-assistant',
+            element: <StudentAiAssistantPage />,
+          },
         ],
       },
     ],
@@ -130,6 +136,10 @@ export const router = createBrowserRouter([
           {
             path: 'quizzes',
             element: <TeacherQuizzesPage />,
+          },
+          {
+            path: 'ai-quiz',
+            element: <TeacherAiQuizPage />,
           },
           {
             path: 'grading',

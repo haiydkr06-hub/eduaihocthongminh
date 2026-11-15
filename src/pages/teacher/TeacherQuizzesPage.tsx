@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck,
   Plus,
@@ -7,10 +8,12 @@ import {
   CheckCircle,
   XCircle,
   Check,
+  Sparkles,
 } from 'lucide-react'
 import { teacherService, type TeacherQuiz } from '../../services/teacherService'
 
 export function TeacherQuizzesPage() {
+  const navigate = useNavigate()
   const [quizzes, setQuizzes] = useState<TeacherQuiz[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -79,12 +82,20 @@ export function TeacherQuizzesPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#6857DF] hover:bg-[#5144BE] text-white text-xs font-bold transition shadow-md shadow-[#6857DF]/25"
-        >
-          <Plus className="w-4 h-4" /> Tạo bài kiểm tra mới
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/teacher/ai-quiz')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-[#6857DF] hover:from-pink-600 hover:to-[#5144BE] text-white text-xs font-bold transition shadow-md shadow-pink-500/20"
+          >
+            <Sparkles className="w-4 h-4" /> Soạn Quiz bằng AI
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#6857DF] hover:bg-[#5144BE] text-white text-xs font-bold transition shadow-md shadow-[#6857DF]/25"
+          >
+            <Plus className="w-4 h-4" /> Tạo bài kiểm tra mới
+          </button>
+        </div>
       </div>
 
       {notice && (
