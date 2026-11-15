@@ -1,126 +1,147 @@
-# EduAI — Nền tảng học trực tuyến tích hợp AI
+# EduAI — Hệ thống học tập thông minh tích hợp trí tuệ nhân tạo (AI)
 
-EduAI hướng tới kết nối khóa học, bài học, quiz và theo dõi tiến độ trên một nền tảng web. Giảng viên có thể dùng AI tạo **bản nháp** câu hỏi từ tài liệu rồi duyệt/chỉnh sửa trước khi xuất bản.
-
-> **Trạng thái hiện tại:** Repository đang chứa demo dashboard React + TypeScript + Vite với dữ liệu mẫu chạy ở trình duyệt. Supabase Auth/database, AI quiz backend, phân quyền Instructor/Admin và các trang nghiệp vụ khác là kiến trúc mục tiêu được mô tả trong tài liệu, chưa được triển khai trong demo này.
+EduAI là nền tảng giáo dục trực tuyến toàn diện, kết nối học viên, giảng viên và quản trị viên với sự trợ lực mạnh mẽ từ trí tuệ nhân tạo (AI). Nền tảng được xây dựng trên nền React 19, TypeScript, Vite, Tailwind CSS và Supabase.
 
 [![React](https://img.shields.io/badge/React-19-149eca?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite)](https://vite.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06b6d4?logo=tailwindcss)](https://tailwindcss.com/)
-[![Supabase](https://img.shields.io/badge/Supabase-planned-3ecf8e?logo=supabase)](https://supabase.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Auth-3ecf8e?logo=supabase)](https://supabase.com/)
 
-## Ảnh demo
+---
 
-![Placeholder ảnh demo EduAI — thay bằng screenshot giao diện thực tế khi phát hành](https://placehold.co/1280x720/F7F8FC/6857DF?text=EduAI+Dashboard+Demo)
+## Kiến trúc 3 phân hệ độc lập (RBAC)
 
-## Tính năng
+### 1. Quản trị viên (Admin) — `/admin`
+- **Dashboard quản trị:** Thống kê tổng số học viên, giảng viên, khóa học, quiz, lượt nộp bài và tỷ lệ hoàn thành.
+- **Quản lý người dùng & phân quyền:** Tìm kiếm, lọc theo vai trò (`admin`, `teacher`, `student`), phân quyền nhanh qua modal xác thực.
+- **Kiểm duyệt khóa học:** Phê duyệt (`published`), chuyển nháp (`draft`) hoặc lưu trữ (`archived`).
+- **Quản lý bài kiểm tra (Quiz):** Quản lý đề thi, tỷ lệ đạt, xem chi tiết và xóa đề thi.
+- **Báo cáo & Thống kê hệ thống:** Tỷ lệ hoàn thành theo danh mục, phổ điểm học viên toàn trường, xuất báo cáo CSV.
+- **Thông báo toàn hệ thống:** Gửi thông báo broadcast tới học viên, giảng viên hoặc toàn trường.
+- **Cài đặt hệ thống:** Cấu hình thông tin trường học, AI Model (OpenAI / Google Gemini / Claude), Supabase và chế độ bảo trì.
 
-### Học viên (Student)
+### 2. Giảng viên (Teacher) — `/teacher`
+- **Dashboard giảng viên:** Theo dõi tổng học viên, khóa học đang dạy, bài kiểm tra và bài nộp cần chấm điểm.
+- **Quản lý khóa học của tôi:** Tạo khóa học mới, chỉnh sửa, thêm bài giảng kèm link video YouTube embed và thời lượng.
+- **Quản lý lớp học & học viên:** Danh sách học viên ghi danh, tiến độ học (%) và điểm số trung bình.
+- **Tạo & Quản lý bài kiểm tra:** Trình soạn quiz thủ công với danh sách câu hỏi trắc nghiệm, đáp án đúng và lời giải thích.
+- **Soạn Quiz tự động bằng AI:** Nhập tài liệu/nội dung bài giảng, AI tự động phân tích và sinh bộ câu hỏi trắc nghiệm kèm giải thích; giảng viên có thể xem trước, chỉnh sửa câu hỏi/đáp án trước khi xuất bản.
+- **Chấm điểm & Nhận xét:** Xem danh sách bài thi của học viên, chấm điểm, nhập nhận xét chi tiết.
+- **Thống kê kết quả giảng dạy:** Cảnh báo học viên cần lưu ý/tiến độ chậm, phân bố kết quả học tập.
+- **Hồ sơ giảng viên:** Cập nhật thông tin chuyên môn, khoa/bộ môn, tiểu sử và đổi mật khẩu.
 
-- Dashboard tiến độ học tập và thống kê mẫu.
-- Tìm kiếm khóa học theo tên, môn học hoặc giảng viên.
-- Lọc khóa học đang học/đã hoàn thành.
-- Xem lịch học sắp tới và tương tác với thông báo, nút tiếp tục học (minh họa frontend).
+### 3. Học viên (Student) — `/student`
+- **Dashboard học tập:** Giữ nguyên phong cách giao diện EduAI tím đặc trưng (`#6857DF`), thống kê khóa học, tiến độ cá nhân, bảng xếp hạng và biểu đồ thời gian học trong tuần.
+- **Khám phá & Khóa học của tôi:** Tìm kiếm theo danh mục môn học, lọc trạng thái, ghi danh vào khóa học mới với 1 cú click.
+- **Phòng học trực tuyến:** Xem bài giảng đa phương tiện (Video Player responsive), danh sách bài học, đánh dấu hoàn thành, tích hợp khung chat Trợ lý AI gia sư trực tiếp bên cạnh bài học.
+- **Làm bài kiểm tra trực tuyến (Quiz):** Đồng hồ đếm ngược thời gian thực, bảng điều hướng danh sách câu hỏi, nộp bài tính điểm tự động, hiển thị đáp án đúng kèm lời giải thích chi tiết.
+- **Lịch học & Lịch thi:** Theo dõi thời khóa biểu, lịch thi và hạn nộp bài tập theo ngày.
+- **Thành tích & Chứng chỉ:** Chuỗi học tập (Streak), điểm tích lũy (XP), huy hiệu danh hiệu và cấp chứng chỉ hoàn thành khóa học.
+- **Trợ lý AI học tập 24/7:** Hỏi đáp kiến thức mọi môn học Toán, Lý, Hóa, Tiếng Anh; gợi ý câu hỏi nhanh, hỗ trợ định dạng công thức và sao chép câu trả lời.
+- **Hồ sơ cá nhân:** Chỉnh sửa thông tin cá nhân và cập nhật mật khẩu.
 
-### Giảng viên (Instructor) — định hướng
+---
 
-- Tạo và quản lý khóa học, bài học.
-- Sinh bản nháp quiz từ tài liệu bằng AI.
-- Duyệt, sửa, lưu nháp hoặc xuất bản quiz.
+## Bảo mật & Phân quyền (Authentication & RLS)
 
-### Quản trị viên (Admin) — định hướng
+- **Supabase Authentication:** Hỗ trợ Đăng nhập, Đăng ký (lựa chọn vai trò Học viên hoặc Giảng viên), Quên mật khẩu và Đặt lại mật khẩu.
+- **Role-Based Access Control (RBAC):**
+  - Trang bảo vệ `ProtectedRoute`: Kiểm tra session đăng nhập và vai trò người dùng.
+  - Ngăn chặn triệt để hành vi truy cập trái phép bằng cách nhập URL trực tiếp.
+  - Tự động chuyển hướng đúng Dashboard theo vai trò sau khi đăng nhập (`/` $\rightarrow$ `/admin/dashboard`, `/teacher/dashboard`, hoặc `/student/dashboard`).
+  - Trang lỗi trực quan: `403 Unauthorized` (không đủ quyền hạn) và `404 Not Found`.
+- **Database Row Level Security (RLS):** 10 bảng dữ liệu (`profiles`, `courses`, `lessons`, `enrollments`, `lesson_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `notifications`) được bảo vệ bằng RLS policy ở cấp cơ sở dữ liệu.
 
-- Quản lý người dùng, vai trò và nội dung.
-- Xem thống kê hệ thống và hoạt động quản trị.
+---
 
-> Các luồng Instructor/Admin, AI và dữ liệu Supabase chưa hoạt động trong bản demo hiện tại.
+## Cài đặt và Khởi chạy
 
-## Công nghệ
+### Yêu cầu hệ thống
+- **Node.js:** phiên bản `20.19+` hoặc `22.12+`
+- **npm:** phiên bản `10+`
 
-| Công nghệ | Sử dụng |
-|---|---|
-| React + TypeScript | Giao diện component và kiểu dữ liệu |
-| Vite | Dev server và build |
-| CSS responsive | Giao diện dashboard demo |
-| Tailwind CSS | Có cấu hình dependency; chưa dùng làm styling chính của dashboard |
-| Supabase | Backend/Auth/Database dự kiến, chưa tích hợp trong runtime hiện tại |
-| Zustand, React Router, Axios, React Hook Form, Zod | Stack thiết kế cho bản mở rộng, chưa được cài/tích hợp trong demo |
+### Các bước thực hiện
 
-## Yêu cầu hệ thống
+1. **Clone repository:**
+   ```bash
+   git clone https://github.com/haiydkr06-hub/eduaihocthongminh.git
+   cd eduaihocthongminh/eduai
+   ```
 
-- Node.js **20.19+** hoặc **22.12+** (theo yêu cầu của Vite hiện được dự án cài đặt).
-- npm đi kèm Node.js.
-- Git để clone repository.
+2. **Cài đặt thư viện:**
+   ```bash
+   npm install
+   ```
 
-## Cài đặt và chạy local
+3. **Cấu hình môi trường:**
+   Tạo file `.env.local` tại thư mục `eduai/` với thông tin Supabase của bạn:
+   ```dotenv
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-public-key
+   VITE_AI_API_URL=https://your-project.supabase.co/functions/v1/generate-quiz
+   ```
+   *(Hệ thống đã có cơ chế fallback thông minh, ứng dụng vẫn hiển thị và chạy demo mượt mà ngay cả khi chưa kết nối Supabase).*
 
-```bash
-git clone https://github.com/haiydkr06-hub/EduAI.git
-cd EduAI
-npm install
-npm run dev
-```
+4. **Khởi chạy Database Migration:**
+   Mở SQL Editor trên Supabase Dashboard và thực thi script:
+   `supabase/migrations/20261115_init_schema.sql`
 
-Mở URL Vite in trong terminal, thường là `http://localhost:5173`.
+5. **Khởi chạy ứng dụng:**
+   ```bash
+   npm run dev
+   ```
+   Mở trình duyệt tại: `http://localhost:5173`
 
-Demo dashboard hiện dùng dữ liệu cục bộ nên **không cần `.env`**. Khi tích hợp Supabase, tạo `.env.local` ở thư mục gốc và thêm biến public phù hợp:
+6. **Kiểm tra mã nguồn & Build:**
+   ```bash
+   npm run lint     # Oxlint kiểm tra cú pháp và quy tắc React (0 warnings, 0 errors)
+   npm run build    # TypeScript compiler (tsc -b) & Vite production build
+   ```
 
-```dotenv
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-public-anon-key
-VITE_AI_API_URL=https://your-project.supabase.co/functions/v1/generate-quiz
-```
+---
 
-Không commit `.env.local`, Supabase `service_role` hoặc AI provider key. Secret của AI phải được cấu hình trong Supabase Edge Function Secrets, không có tiền tố `VITE_`.
-
-## Lệnh phát triển
-
-```bash
-npm run dev      # Chạy Vite dev server
-npm run build    # Kiểm tra TypeScript và tạo dist/
-npm run preview  # Xem thử production build
-npm run lint     # Chạy Oxlint
-```
-
-`package.json` hiện chưa khai báo script test; chưa có automated test suite trong repository.
-
-## Cấu trúc thư mục
+## Cấu trúc thư mục mã nguồn
 
 ```text
-EduAI/
-├── docs/                    # Đặc tả nghiệp vụ, UI, kỹ thuật frontend/backend
-├── public/                  # Tài nguyên tĩnh, favicon
+eduai/
 ├── src/
-│   ├── assets/
-│   ├── App.tsx              # Dashboard demo và tương tác UI
-│   ├── App.css              # Style dashboard responsive
-│   ├── index.css            # Global styles
-│   └── main.tsx             # React entry point
-├── index.html
+│   ├── app/
+│   │   └── router.tsx                     # Hệ thống định tuyến toàn diện & RBAC
+│   ├── components/
+│   │   ├── auth/
+│   │   │   ├── ProtectedRoute.tsx         # Route Guard ngăn chặn truy cập trái phép
+│   │   │   └── RootRedirect.tsx           # Điều hướng thông minh theo Role
+│   │   └── layout/
+│   │       ├── AdminLayout.tsx            # Khung giao diện Quản trị viên
+│   │       ├── TeacherLayout.tsx          # Khung giao diện Giảng viên
+│   │       └── StudentLayout.tsx          # Khung giao diện Học viên (Style tím đặc trưng)
+│   ├── contexts/
+│   │   ├── auth-context-base.ts          # Định nghĩa Context & Kiểu
+│   │   └── AuthContext.tsx                # Quản lý Session Supabase & Profile
+│   ├── hooks/
+│   │   └── useAuth.ts                     # Custom hook xác thực
+│   ├── lib/
+│   │   └── supabase.ts                    # Supabase Client khởi tạo
+│   ├── pages/
+│   │   ├── admin/                         # 7 trang nghiệp vụ Admin
+│   │   ├── teacher/                       # 7 trang nghiệp vụ Teacher + AI Quiz
+│   │   ├── student/                       # 7 trang nghiệp vụ Student + AI Tutor
+│   │   ├── auth/                          # Login, Register, Forgot, Reset Password
+│   │   └── error/                         # 403 Unauthorized, 404 Not Found
+│   ├── services/
+│   │   ├── adminService.ts                # Dữ liệu & Thống kê Admin
+│   │   ├── teacherService.ts              # Quản lý khóa học, bài học, chấm điểm
+│   │   ├── studentService.ts              # Học tập, nộp quiz, tiến độ, thành tích
+│   │   └── aiService.ts                   # Trợ lý AI Gia sư & AI Quiz Generator
+│   ├── types/
+│   │   └── auth.ts                        # TypeScript interfaces & Enums
+│   ├── App.css
+│   ├── index.css
+│   └── main.tsx
+├── supabase/
+│   └── migrations/
+│       └── 20261115_init_schema.sql       # 10 bảng, Trigger, RLS Policies & Indices
 ├── package.json
-├── vite.config.ts
-└── README.md
+└── vite.config.ts
 ```
-
-## Deploy lên Vercel
-
-1. Import repository EduAI vào Vercel.
-2. Chọn framework preset **Vite**.
-3. Build command: `npm run build`; output directory: `dist`.
-4. Với demo hiện tại, không cần environment variables.
-5. Sau khi tích hợp Supabase, khai báo public `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` trong Project Settings; cấu hình provider secrets trong Supabase Edge Functions.
-6. Deploy Preview trước; kiểm tra responsive, console/network, Auth callback, RLS và Edge Function trước khi promote Production.
-
-## Tài liệu
-
-- [Tài liệu nghiệp vụ](docs/01-TAI-LIEU-NGHIEP-VU.md)
-- [Tài liệu giao diện và AI](docs/02-TAI-LIEU-GIAO-DIEN-AI.md)
-- [Tài liệu kỹ thuật AI Frontend](docs/03-TAI-LIEU-KY-THUAT-AI-FRONTEND.md)
-- [Tài liệu kỹ thuật AI Backend/Admin](docs/04-TAI-LIEU-KY-THUAT-AI-ADMIN.md)
-- [Hướng dẫn dành cho AI agents](AGENTS.md)
-
-## Tác giả và giấy phép
-
-- **Tác giả:** Hồ Hải Ý
-- **License:** Chưa xác định trong repository. MIT có thể được cân nhắc; cần thêm tệp `LICENSE` và xác nhận quyền sử dụng trước khi phát hành theo giấy phép đó.
