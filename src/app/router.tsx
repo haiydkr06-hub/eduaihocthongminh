@@ -16,6 +16,7 @@ import { StudentSchedulePage } from '../pages/student/StudentSchedulePage'
 import { StudentAchievementsPage } from '../pages/student/StudentAchievementsPage'
 import { StudentProfilePage } from '../pages/student/StudentProfilePage'
 import { StudentAiAssistantPage } from '../pages/student/StudentAiAssistantPage'
+import { StudentNotificationsPage } from '../pages/student/StudentNotificationsPage'
 import { TeacherLayout } from '../components/layout/TeacherLayout'
 import { TeacherDashboardPage } from '../pages/teacher/TeacherDashboardPage'
 import { TeacherCoursesPage } from '../pages/teacher/TeacherCoursesPage'
@@ -103,6 +104,10 @@ export const router = createBrowserRouter([
           {
             path: 'ai-assistant',
             element: <StudentAiAssistantPage />,
+          },
+          {
+            path: 'notifications',
+            element: <StudentNotificationsPage />,
           },
         ],
       },
