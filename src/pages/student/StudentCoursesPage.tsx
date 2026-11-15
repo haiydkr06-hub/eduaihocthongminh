@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Search,
   Play,
@@ -10,60 +10,73 @@ import {
 } from 'lucide-react'
 import { studentService, type StudentCourseItem } from '../../services/studentService'
 import { useAuth } from '../../hooks/useAuth'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 
 export function StudentCoursesPage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
 
-  const [activeTab, setActiveTab] = useState<'my' | 'explore'>('my')
+  const [searchParams] = useSearchParams()
+  const initialSearch = searchParams.get('search') || ''
+
+  // Từ khóa từ thanh tìm kiếm ở header (?search=...) -> tìm trong toàn bộ danh mục
+  const [activeTab, setActiveTab] = useState<'my' | 'explore'>(initialSearch ? 'explore' : 'my')
   const [myCourses, setMyCourses] = useState<StudentCourseItem[]>([])
   const [allCourses, setAllCourses] = useState<StudentCourseItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(initialSearch)
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [enrollingId, setEnrollingId] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
-  const loadData = async () => {
-    setLoading(true)
-    const [mine, available] = await Promise.all([
-      studentService.getMyCourses(profile?.id),
-      studentService.getAllAvailableCourses(),
-    ])
-    setMyCourses(mine)
-    setAllCourses(available)
-    setLoading(false)
+  // Đồng bộ khi người dùng tìm kiếm lại từ header trong lúc đang ở trang này
+  const [lastParam, setLastParam] = useState(initialSearch)
+  if (initialSearch !== lastParam) {
+    setLastParam(initialSearch)
+    setSearch(initialSearch)
+    if (initialSearch) setActiveTab('explore')
   }
 
   useEffect(() => {
+    if (!profile?.id) return
     let active = true
-    Promise.all([
-      studentService.getMyCourses(profile?.id),
-      studentService.getAllAvailableCourses(),
-    ])
+    Promise.all([studentService.getMyCourses(profile.id), studentService.getAllAvailableCourses(profile.id)])
       .then(([mine, available]) => {
-        if (active) {
-          setMyCourses(mine)
-          setAllCourses(available)
-          setLoading(false)
-        }
+        if (!active) return
+        setMyCourses(mine)
+        setAllCourses(available)
+        setError(null)
       })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
+      .catch((err) => {
+        if (active) setError(getFriendlyErrorMessage(err, 'Không thể tải danh sách khóa học.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
       })
     return () => {
       active = false
     }
-  }, [profile?.id])
+  }, [profile?.id, reloadKey])
 
   const handleEnroll = async (courseId: string, courseTitle: string) => {
-    if (!profile?.id) return
-    const success = await studentService.enrollCourse(profile.id, courseId)
-    if (success) {
-      setNotice(`Chúc mừng bạn đã đăng ký thành công khóa học: "${courseTitle}"!`)
-      loadData()
+    if (!profile?.id || enrollingId) return
+    setEnrollingId(courseId)
+    setError(null)
+    try {
+      const result = await studentService.enrollCourse(profile.id, courseId)
+      setNotice(
+        result === 'already_enrolled'
+          ? `Bạn đã tham gia khóa học "${courseTitle}" từ trước.`
+          : `Chúc mừng bạn đã đăng ký thành công khóa học: "${courseTitle}"!`
+      )
+      setReloadKey((k) => k + 1)
       setTimeout(() => setNotice(null), 3000)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Đăng ký khóa học không thành công. Vui lòng thử lại.'))
+    } finally {
+      setEnrollingId(null)
     }
   }
 
@@ -114,6 +127,9 @@ export function StudentCoursesPage() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -211,7 +227,7 @@ export function StudentCoursesPage() {
                       />
                     </div>
                     <button
-                      onClick={() => navigate(`/student/learn/${c.id}`)}
+                      onClick={() => navigate(`/student/learning/${c.id}`)}
                       className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#6857DF] hover:bg-[#5144BE] text-white text-xs font-bold transition shadow-sm"
                     >
                       <Play className="w-4 h-4 fill-white" /> Vào phòng học
@@ -225,6 +241,7 @@ export function StudentCoursesPage() {
                     </div>
                     <button
                       onClick={() => handleEnroll(c.id, c.title)}
+                      disabled={enrollingId !== null}
                       className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#6857DF] to-[#5144BE] hover:from-[#5144BE] hover:to-[#413694] text-white text-xs font-bold transition shadow-md shadow-[#6857DF]/20"
                     >
                       <PlusCircle className="w-4 h-4" /> Đăng ký học ngay

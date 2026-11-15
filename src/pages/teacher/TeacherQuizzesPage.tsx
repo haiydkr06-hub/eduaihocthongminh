@@ -10,18 +10,27 @@ import {
   Check,
   Sparkles,
 } from 'lucide-react'
-import { teacherService, type TeacherQuiz } from '../../services/teacherService'
+import { teacherService, type TeacherQuiz, type TeacherCourse } from '../../services/teacherService'
+import { useAuth } from '../../hooks/useAuth'
+import { useTeacherScope } from '../../hooks/useTeacherScope'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 
 export function TeacherQuizzesPage() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const scope = useTeacherScope()
   const [quizzes, setQuizzes] = useState<TeacherQuiz[]>([])
+  const [courses, setCourses] = useState<TeacherCourse[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [busyQuizId, setBusyQuizId] = useState<string | null>(null)
 
   // Form states
   const [title, setTitle] = useState('')
-  const [courseTitle, setCourseTitle] = useState('Toán học tư duy bậc THPT')
+  const [courseId, setCourseId] = useState('')
   const [timeLimit, setTimeLimit] = useState(15)
   const [passScore, setPassScore] = useState(60)
   const [questionPrompt, setQuestionPrompt] = useState('')
@@ -33,49 +42,77 @@ export function TeacherQuizzesPage() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
+    if (scope === undefined) return
     let active = true
-    teacherService.getQuizzes()
-      .then((data) => {
-        if (active) {
-          setQuizzes(data)
-          setLoading(false)
-        }
+    Promise.all([teacherService.getQuizzes(scope), teacherService.getCourses(scope)])
+      .then(([quizData, courseData]) => {
+        if (!active) return
+        setQuizzes(quizData)
+        setCourses(courseData)
+        setCourseId((prev) => prev || courseData[0]?.id || '')
       })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
+      .catch((err) => {
+        if (active) setError(getFriendlyErrorMessage(err, 'Không thể tải danh sách bài kiểm tra.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
       })
     return () => {
       active = false
     }
-  }, [])
+  }, [scope, reloadKey])
 
   const handleCreateQuiz = async (e: FormEvent) => {
     e.preventDefault()
-    if (!title.trim()) return
+    if (!title.trim() || !profile?.id || submitting) return
 
+    const hasQuestion = questionPrompt.trim().length > 0
     setSubmitting(true)
-    const newQuiz = await teacherService.createQuiz({
-      course_id: 'tc-1',
-      courseTitle,
-      title: title.trim(),
-      timeLimit,
-      passScore,
-      questionsCount: questionPrompt.trim() ? 1 : 10,
-    })
-    setSubmitting(false)
+    setError(null)
+    try {
+      // Câu hỏi giảng viên nhập được lưu thật (trước đây bị bỏ qua và quiz luôn gắn vào khóa "tc-1")
+      const newQuiz = await teacherService.createQuiz(profile.id, {
+        course_id: courseId,
+        title: title.trim(),
+        timeLimit,
+        passScore,
+        status: 'draft',
+        questions: hasQuestion
+          ? [{ prompt: questionPrompt.trim(), options: [optA, optB, optC, optD].map((o) => o.trim()), answer_key: correctIdx, explanation: '' }]
+          : [],
+      })
+      setQuizzes((prev) => [newQuiz, ...prev])
+      setShowCreateModal(false)
+      setTitle('')
+      setQuestionPrompt('')
+      setOptA('')
+      setOptB('')
+      setOptC('')
+      setOptD('')
+      setNotice(`Đã lưu bản nháp "${newQuiz.title}". Bấm "Xuất bản" khi đã sẵn sàng cho học viên làm bài.`)
+      setTimeout(() => setNotice(null), 4000)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không lưu được bài kiểm tra.'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
-    setQuizzes([newQuiz, ...quizzes])
-    setShowCreateModal(false)
-    setTitle('')
-    setQuestionPrompt('')
-    setOptA('')
-    setOptB('')
-    setOptC('')
-    setOptD('')
-    setNotice(`Đã tạo bài kiểm tra "${newQuiz.title}" thành công!`)
-    setTimeout(() => setNotice(null), 3000)
+  const toggleStatus = async (quiz: TeacherQuiz) => {
+    if (busyQuizId) return
+    setBusyQuizId(quiz.id)
+    setError(null)
+    try {
+      const next = quiz.status === 'published' ? 'draft' : 'published'
+      await teacherService.setQuizStatus(quiz.id, next)
+      setNotice(next === 'published' ? `Đã xuất bản "${quiz.title}" cho học viên.` : `Đã thu hồi "${quiz.title}" về bản nháp.`)
+      setReloadKey((k) => k + 1)
+      setTimeout(() => setNotice(null), 3000)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không cập nhật được trạng thái quiz.'))
+    } finally {
+      setBusyQuizId(null)
+    }
   }
 
   return (
@@ -104,6 +141,9 @@ export function TeacherQuizzesPage() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -160,10 +200,11 @@ export function TeacherQuizzesPage() {
                   Đã có <strong>{quiz.submissionsCount}</strong> lượt thi
                 </span>
                 <button
-                  onClick={() => alert(`Xem chi tiết quiz: ${quiz.title}`)}
-                  className="px-3 py-1.5 rounded-lg border border-[#eceef4] hover:bg-[#F0EDFF] hover:text-[#6857DF] font-semibold text-[#252641] transition"
+                  onClick={() => void toggleStatus(quiz)}
+                  disabled={busyQuizId !== null}
+                  className="px-3 py-1.5 rounded-lg border border-[#eceef4] hover:bg-[#F0EDFF] hover:text-[#6857DF] font-semibold text-[#252641] transition disabled:opacity-50"
                 >
-                  Chi tiết
+                  {quiz.status === 'published' ? 'Thu hồi' : 'Xuất bản'}
                 </button>
               </div>
             </div>
@@ -198,13 +239,15 @@ export function TeacherQuizzesPage() {
                   Khóa học áp dụng
                 </label>
                 <select
-                  value={courseTitle}
-                  onChange={(e) => setCourseTitle(e.target.value)}
+                  value={courseId}
+                  onChange={(e) => setCourseId(e.target.value)}
+                  required
                   className="w-full px-3.5 py-2.5 bg-[#f7f8fc] border border-[#eceef4] rounded-xl text-xs focus:outline-none focus:border-[#6857DF]"
                 >
-                  <option value="Toán học tư duy bậc THPT">Toán học tư duy bậc THPT</option>
-                  <option value="Hình học giải tích và ứng dụng">Hình học giải tích và ứng dụng</option>
-                  <option value="Đại số tổ hợp và Xác suất">Đại số tổ hợp và Xác suất</option>
+                  {courses.length === 0 && <option value="">— Bạn chưa có khóa học nào —</option>}
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>{c.title}</option>
+                  ))}
                 </select>
               </div>
 
@@ -305,7 +348,7 @@ export function TeacherQuizzesPage() {
                   disabled={submitting}
                   className="px-4 py-2 rounded-xl bg-[#6857DF] hover:bg-[#5144BE] text-white text-xs font-bold transition shadow-sm"
                 >
-                  {submitting ? 'Đang lưu...' : 'Lưu bài kiểm tra'}
+                  {submitting ? 'Đang lưu...' : 'Lưu bản nháp'}
                 </button>
               </div>
             </form>

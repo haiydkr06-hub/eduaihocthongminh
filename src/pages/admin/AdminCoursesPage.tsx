@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   BookOpen,
   Search,
@@ -9,6 +9,7 @@ import {
   Check,
   Clock,
 } from 'lucide-react'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 import { adminService, type AdminCourseItem } from '../../services/adminService'
 
 export function AdminCoursesPage() {
@@ -19,45 +20,47 @@ export function AdminCoursesPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [inspectCourse, setInspectCourse] = useState<AdminCourseItem | null>(null)
 
-  const refreshCourses = async () => {
-    const data = await adminService.getCourses()
-    setCourses(data)
-  }
+  const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
 
-  useEffect(() => {
-    let active = true
-    adminService.getCourses()
-      .then((data) => {
-        if (active) {
-          setCourses(data)
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
-      })
-
-    const handleUpdate = () => {
-      refreshCourses()
-    }
-    window.addEventListener('eduai:courses_updated', handleUpdate)
-
-    return () => {
-      active = false
-      window.removeEventListener('eduai:courses_updated', handleUpdate)
+  const refreshCourses = useCallback(async () => {
+    try {
+      setCourses(await adminService.getCourses())
+      setError(null)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không thể tải danh sách khóa học.'))
+    } finally {
+      setLoading(false)
     }
   }, [])
 
+  useEffect(() => {
+    void Promise.resolve().then(refreshCourses)
+    const handleUpdate = () => {
+      void refreshCourses()
+    }
+    window.addEventListener('eduai:courses_updated', handleUpdate)
+    return () => {
+      window.removeEventListener('eduai:courses_updated', handleUpdate)
+    }
+  }, [refreshCourses])
+
+  const statusLabel: Record<string, string> = { draft: 'Bản nháp', published: 'Đã xuất bản', archived: 'Lưu trữ' }
+
   const handleStatusChange = async (courseId: string, newStatus: 'draft' | 'published' | 'archived') => {
-    const success = await adminService.updateCourseStatus(courseId, newStatus)
-    if (success) {
-      setNotice(`Đã cập nhật trạng thái khóa học sang "${newStatus}" thành công!`)
-      refreshCourses()
+    if (busyId) return
+    setBusyId(courseId)
+    setError(null)
+    try {
+      await adminService.updateCourseStatus(courseId, newStatus)
+      setNotice(`Đã cập nhật trạng thái khóa học sang "${statusLabel[newStatus]}" và thông báo cho giảng viên.`)
+      setInspectCourse(null)
+      void refreshCourses()
       setTimeout(() => setNotice(null), 3000)
-    } else {
-      alert('Không thể cập nhật trạng thái khóa học')
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không thể cập nhật trạng thái khóa học.'))
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -112,6 +115,9 @@ export function AdminCoursesPage() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />

@@ -6,31 +6,35 @@ import {
   Mail,
 } from 'lucide-react'
 import { teacherService, type StudentInClass } from '../../services/teacherService'
+import { useTeacherScope } from '../../hooks/useTeacherScope'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 
 export function TeacherClassesPage() {
+  const scope = useTeacherScope()
   const [students, setStudents] = useState<StudentInClass[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selectedCourse, setSelectedCourse] = useState('all')
 
   useEffect(() => {
+    if (scope === undefined) return
     let active = true
-    teacherService.getStudents()
+    teacherService
+      .getStudents(scope)
       .then((data) => {
-        if (active) {
-          setStudents(data)
-          setLoading(false)
-        }
+        if (active) setStudents(data)
       })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
+      .catch((err) => {
+        if (active) setError(getFriendlyErrorMessage(err, 'Không thể tải danh sách học viên.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
       })
     return () => {
       active = false
     }
-  }, [])
+  }, [scope])
 
   const filteredStudents = students.filter((s) => {
     const matchCourse = selectedCourse === 'all' || s.courseName === selectedCourse
@@ -53,6 +57,9 @@ export function TeacherClassesPage() {
       </div>
 
       {/* Filter and Search */}
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       <div className="bg-white rounded-2xl border border-[#eceef4] p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex items-center gap-2 w-full md:w-auto">
           <label className="text-xs font-bold text-[#777a91] whitespace-nowrap">Khóa học:</label>
@@ -148,7 +155,7 @@ export function TeacherClassesPage() {
                     </td>
                     <td className="py-4 px-6 text-right">
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-[#6857DF]">
-                        <Award className="w-3.5 h-3.5 text-amber-500" /> {st.avgScore} / 100
+                        <Award className="w-3.5 h-3.5 text-amber-500" /> {st.avgScore === null ? 'Chưa làm quiz' : `${st.avgScore} / 100`}
                       </span>
                     </td>
                   </tr>

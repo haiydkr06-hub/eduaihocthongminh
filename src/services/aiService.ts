@@ -1,17 +1,33 @@
+/**
+ * Dịch vụ AI của EduAI.
+ *
+ * Hiện tại chạy bằng "AI mô phỏng" cục bộ (thuật toán phân tích văn bản trong trình duyệt),
+ * KHÔNG gọi mô hình ngôn ngữ và KHÔNG cần API key. Kết quả luôn là BẢN NHÁP để giảng viên duyệt.
+ * Khi tích hợp mô hình thật, thay phần thân hàm bằng lời gọi Supabase Edge Function (xem docs/04).
+ */
+
+export type QuizDifficulty = 'easy' | 'medium' | 'hard'
+
 export interface AIQuizQuestion {
   id: string
   prompt: string
-  options: [string, string, string, string]
+  options: string[]
   answer_key: number
   explanation: string
-  difficulty: 'easy' | 'medium' | 'hard'
+  difficulty: QuizDifficulty
 }
 
 export interface GenerateQuizParams {
   content: string
   courseTitle: string
   questionsCount: number
-  difficulty: 'easy' | 'medium' | 'hard'
+  difficulty: QuizDifficulty
+}
+
+export interface GenerateQuizResult {
+  questions: AIQuizQuestion[]
+  /** Cảnh báo hiển thị cho giảng viên (ví dụ: tài liệu không đủ ý để sinh đủ số câu). */
+  warnings: string[]
 }
 
 export interface AIChatMessage {
@@ -21,167 +37,254 @@ export interface AIChatMessage {
   createdAt: string
 }
 
+export const AI_ENGINE_LABEL = 'AI mô phỏng (chạy cục bộ, chưa kết nối mô hình ngôn ngữ)'
+export const SOURCE_MIN_CHARS = 100
+export const SOURCE_MAX_CHARS = 30_000
+export const MAX_QUESTIONS = 20
+
+export class AIInputError extends Error {}
+
+/* ============================== TIỆN ÍCH ============================== */
+
+function shuffle<T>(items: T[]): T[] {
+  const a = [...items]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+
+/** Cặp từ trái nghĩa / đối lập dùng để tạo phương án nhiễu "gần đúng". */
+const OPPOSITES: [string, string][] = [
+  ['đồng biến', 'nghịch biến'],
+  ['hướng lên', 'hướng xuống'],
+  ['quay lên', 'quay xuống'],
+  ['lên trên', 'xuống dưới'],
+  ['lớn nhất', 'nhỏ nhất'],
+  ['cao nhất', 'thấp nhất'],
+  ['tỉ lệ thuận', 'tỉ lệ nghịch'],
+  ['tăng', 'giảm'],
+  ['dương', 'âm'],
+  ['luôn', 'không bao giờ'],
+  ['hút', 'đẩy'],
+  ['trước', 'sau'],
+  ['bên trái', 'bên phải'],
+  ['nhanh', 'chậm'],
+  ['a > 0', 'a < 0'],
+  ['> 0', '< 0'],
+  ['since', 'for'],
+  ['always', 'never'],
+]
+
+function swapOpposite(sentence: string): string | null {
+  const lower = sentence.toLowerCase()
+  for (const [a, b] of shuffle(OPPOSITES)) {
+    const ia = lower.indexOf(a)
+    if (ia !== -1) return sentence.slice(0, ia) + b + sentence.slice(ia + a.length)
+    const ib = lower.indexOf(b)
+    if (ib !== -1) return sentence.slice(0, ib) + a + sentence.slice(ib + b.length)
+  }
+  return null
+}
+
+/** Biến đổi số trong câu (vd 9,8 -> 10,8) để tạo phương án sai. */
+function perturbNumber(text: string): string | null {
+  const m = /-?\d+(?:[.,]\d+)?/.exec(text)
+  if (!m) return null
+  const raw = m[0]
+  const n = Number(raw.replace(',', '.'))
+  if (!Number.isFinite(n)) return null
+  const delta = Number.isInteger(n) ? (Math.random() < 0.5 ? 1 : 2) : 1
+  const sign = Math.random() < 0.5 ? -1 : 1
+  let next = n + sign * delta
+  // Không biến số dương thành 0/âm (tránh phương án vô nghĩa như "-b/0a")
+  if (n > 0 && next <= 0) next = n + delta
+  if (next === n) next = n + 1
+  const formatted = raw.includes(',') ? String(next).replace('.', ',') : String(next)
+  return text.slice(0, m.index) + formatted + text.slice(m.index + raw.length)
+}
+
+/* ============================== PHÂN TÍCH TÀI LIỆU ============================== */
+
+interface Fact {
+  sentence: string
+  /** Chủ thể (vế trái) và nội dung (vế phải) nếu câu có dạng định nghĩa "X là Y" / "X: Y" / "X = Y". */
+  subject?: string
+  answer?: string
+}
+
+function splitSentences(content: string): string[] {
+  return content
+    .replace(/\r/g, '')
+    .replace(/[#*`$]/g, '')
+    // Chỉ tách câu ở xuống dòng hoặc dấu . ! ? theo sau là chữ hoa/số — KHÔNG tách ở ";"
+    // (trước đây cắt cụt tọa độ như "I(-b/2a; -Δ/4a)")
+    .split(/\n+|(?<=[.!?])\s+(?=[\p{Lu}\d])/u)
+    .map((s) => s.replace(/^(?:[-•]|\d+[.)])\s+/, '').trim())
+    .filter((s) => s.length >= 15 && s.length <= 260 && /[\p{L}]/u.test(s))
+}
+
+function toFact(sentence: string): Fact {
+  const clean = sentence.replace(/[.]+$/, '')
+  const patterns: RegExp[] = [
+    /^(.{4,80}?)\s+(?:là|được gọi là|được xác định bởi|có dạng|có đơn vị(?: đo)? là|bằng)\s+(.{2,160})$/i,
+    /^(.{4,80}?)\s*[:：]\s*(.{2,160})$/,
+    /^(.{3,60}?)\s+(?:is|are|means)\s+(.{2,160})$/i,
+  ]
+  for (const re of patterns) {
+    const m = re.exec(clean)
+    if (m && m[2].split(' ').length <= 25) return { sentence: clean, subject: m[1].trim(), answer: m[2].trim() }
+  }
+  return { sentence: clean }
+}
+
+/* ============================== SINH CÂU HỎI ============================== */
+
+let seq = 0
+const qid = () => `ai-q-${Date.now()}-${++seq}`
+
+function buildOptions(correct: string, candidates: string[]): { options: string[]; answer_key: number } | null {
+  const seen = new Set([norm(correct)])
+  const distractors: string[] = []
+  for (const c of candidates) {
+    const n = norm(c)
+    if (!c.trim() || seen.has(n)) continue
+    seen.add(n)
+    distractors.push(c.trim())
+    if (distractors.length === 3) break
+  }
+  if (distractors.length < 3) return null
+  const options = shuffle([correct.trim(), ...distractors])
+  return { options, answer_key: options.indexOf(correct.trim()) }
+}
+
+/** Câu hỏi định nghĩa: "Theo tài liệu, <chủ thể> là gì?" — phương án nhiễu lấy từ các định nghĩa khác. */
+function definitionQuestion(fact: Fact, facts: Fact[], difficulty: QuizDifficulty): AIQuizQuestion | null {
+  if (!fact.subject || !fact.answer) return null
+  const others = facts.filter((f) => f !== fact && f.answer).map((f) => f.answer!)
+  const near = [swapOpposite(fact.answer), perturbNumber(fact.answer)].filter((x): x is string => !!x)
+  // Mức khó: ưu tiên phương án "gần đúng" (đảo nghĩa / đổi số); mức dễ: ưu tiên định nghĩa khác hẳn
+  const pool = difficulty === 'easy' ? [...shuffle(others), ...near] : [...near, ...shuffle(others)]
+  const built = buildOptions(fact.answer, pool)
+  if (!built) return null
+  return {
+    id: qid(),
+    prompt: `Theo tài liệu, "${fact.subject}" là gì / được xác định thế nào?`,
+    ...built,
+    explanation: `Tài liệu nêu: "${fact.sentence}".`,
+    difficulty,
+  }
+}
+
+/** Câu hỏi "phát biểu đúng": đáp án là câu gốc, phương án nhiễu là các câu đã bị đảo nghĩa / đổi số. */
+function trueStatementQuestion(fact: Fact, facts: Fact[], difficulty: QuizDifficulty): AIQuizQuestion | null {
+  const distractors: string[] = []
+  for (const f of shuffle(facts)) {
+    if (f === fact) continue
+    const altered = swapOpposite(f.sentence) ?? perturbNumber(f.sentence)
+    if (altered) distractors.push(altered)
+  }
+  const selfAltered = [swapOpposite(fact.sentence), perturbNumber(fact.sentence)].filter((x): x is string => !!x)
+  const pool = difficulty === 'hard' ? [...selfAltered, ...distractors] : [...distractors, ...selfAltered]
+  const built = buildOptions(fact.sentence, pool)
+  if (!built) return null
+  return {
+    id: qid(),
+    prompt: 'Phát biểu nào sau đây ĐÚNG theo nội dung tài liệu?',
+    ...built,
+    explanation: `Phát biểu đúng được trích từ tài liệu: "${fact.sentence}". Các phương án khác đã bị đổi nghĩa hoặc đổi số liệu.`,
+    difficulty,
+  }
+}
+
+/** Câu hỏi "phát biểu sai": đáp án là câu bị đảo nghĩa; 3 phương án còn lại là câu đúng trong tài liệu. */
+function falseStatementQuestion(fact: Fact, facts: Fact[], difficulty: QuizDifficulty): AIQuizQuestion | null {
+  const wrong = swapOpposite(fact.sentence) ?? perturbNumber(fact.sentence)
+  if (!wrong) return null
+  const truths = shuffle(facts.filter((f) => f !== fact)).map((f) => f.sentence)
+  const built = buildOptions(wrong, truths)
+  if (!built) return null
+  return {
+    id: qid(),
+    prompt: 'Phát biểu nào sau đây KHÔNG ĐÚNG theo nội dung tài liệu?',
+    ...built,
+    explanation: `Câu sai đã bị thay đổi so với tài liệu. Nội dung đúng là: "${fact.sentence}".`,
+    difficulty,
+  }
+}
+
 export const aiService = {
   /**
-   * Sinh bản nháp bộ câu hỏi trắc nghiệm từ nội dung tài liệu bài giảng
+   * Sinh bản nháp câu hỏi trắc nghiệm TỪ CHÍNH NỘI DUNG tài liệu giảng viên cung cấp.
+   * - Đáp án đúng được xáo trộn vị trí (trước đây luôn là A)
+   * - Cố gắng sinh đúng số câu yêu cầu; nếu tài liệu không đủ ý thì trả về ít hơn kèm cảnh báo rõ ràng
    */
-  async generateQuiz(params: GenerateQuizParams): Promise<AIQuizQuestion[]> {
-    // Giả lập độ trễ xử lý của mô hình AI
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+  async generateQuiz(params: GenerateQuizParams): Promise<GenerateQuizResult> {
+    const content = params.content.trim()
+    if (content.length < SOURCE_MIN_CHARS) {
+      throw new AIInputError(`Nội dung tài liệu cần ít nhất ${SOURCE_MIN_CHARS} ký tự (hiện có ${content.length}).`)
+    }
+    if (content.length > SOURCE_MAX_CHARS) {
+      throw new AIInputError(`Nội dung tài liệu tối đa ${SOURCE_MAX_CHARS.toLocaleString('vi-VN')} ký tự.`)
+    }
+    const count = Math.max(1, Math.min(MAX_QUESTIONS, Math.round(params.questionsCount)))
 
-    const isMath = params.courseTitle.toLowerCase().includes('toán') || params.content.toLowerCase().includes('hàm số')
-    const isScience = params.courseTitle.toLowerCase().includes('khoa học') || params.content.toLowerCase().includes('vật lý')
-    const isEnglish = params.courseTitle.toLowerCase().includes('tiếng anh') || params.content.toLowerCase().includes('english')
+    // Giả lập thời gian xử lý để giao diện hiển thị trạng thái loading
+    await new Promise((resolve) => setTimeout(resolve, 600))
 
-    const questions: AIQuizQuestion[] = []
-
-    if (isMath) {
-      questions.push(
-        {
-          id: `ai-q-${Date.now()}-1`,
-          prompt: 'Tọa độ đỉnh I của đồ thị parabol hàm số y = ax² + bx + c (a ≠ 0) được xác định bởi công thức nào?',
-          options: [
-            'I(-b/2a; -Δ/4a)',
-            'I(b/2a; Δ/4a)',
-            'I(-b/a; -Δ/2a)',
-            'I(-b/2a; Δ/4a)',
-          ],
-          answer_key: 0,
-          explanation: 'Theo lý thuyết hàm số bậc hai, đỉnh parabol có hoành độ x = -b/(2a) và tung độ y = -Δ/(4a).',
-          difficulty: params.difficulty,
-        },
-        {
-          id: `ai-q-${Date.now()}-2`,
-          prompt: 'Khi hệ số a > 0, bề lõm của đồ thị hàm số bậc hai y = ax² + bx + c sẽ:',
-          options: [
-            'Hướng lên trên và hàm số có giá trị nhỏ nhất',
-            'Hướng xuống dưới và hàm số có giá trị lớn nhất',
-            'Hướng sang phải đối xứng qua trục hoành',
-            'Hướng sang trái đối xứng qua gốc tọa độ',
-          ],
-          answer_key: 0,
-          explanation: 'Với a > 0, nhánh parabol hướng lên trên, điểm thấp nhất chính là đỉnh I (giá trị nhỏ nhất).',
-          difficulty: params.difficulty,
-        },
-        {
-          id: `ai-q-${Date.now()}-3`,
-          prompt: 'Trục đối xứng của parabol y = 2x² - 8x + 5 là đường thẳng nào dưới đây?',
-          options: ['x = 2', 'x = -2', 'x = 4', 'x = -4'],
-          answer_key: 0,
-          explanation: 'Trục đối xứng có phương trình x = -b/(2a) = -(-8)/(2 * 2) = 2.',
-          difficulty: params.difficulty,
-        },
-        {
-          id: `ai-q-${Date.now()}-4`,
-          prompt: 'Giao điểm của parabol y = x² - 3x + 2 với trục tung Oy có tọa độ là:',
-          options: ['(0; 2)', '(2; 0)', '(1; 0)', '(0; 1)'],
-          answer_key: 0,
-          explanation: 'Giao điểm với trục Oy có hoành độ x = 0 => y = 0² - 3(0) + 2 = 2 => Tọa độ là (0; 2).',
-          difficulty: params.difficulty,
-        },
-        {
-          id: `ai-q-${Date.now()}-5`,
-          prompt: 'Khoảng đồng biến của hàm số y = x² - 4x + 3 là khoảng nào?',
-          options: ['(2; +∞)', '(-∞; 2)', '(1; 3)', '(-∞; 4)'],
-          answer_key: 0,
-          explanation: 'Hệ số a = 1 > 0 nên hàm số nghịch biến trên (-∞; 2) và đồng biến trên (2; +∞).',
-          difficulty: params.difficulty,
-        }
-      )
-    } else if (isScience) {
-      questions.push(
-        {
-          id: `ai-q-${Date.now()}-1`,
-          prompt: 'Theo định luật vạn vật hấp dẫn của Newton, lực hấp dẫn giữa hai vật tỉ lệ nghịch với:',
-          options: [
-            'Bình phương khoảng cách giữa hai vật',
-            'Khoảng cách giữa hai vật',
-            'Tích khối lượng của hai vật',
-            'Tổng khối lượng của hai vật',
-          ],
-          answer_key: 0,
-          explanation: 'Công thức F_hd = G * (m1 * m2) / r², tỉ lệ nghịch với bình phương khoảng cách r².',
-          difficulty: params.difficulty,
-        },
-        {
-          id: `ai-q-${Date.now()}-2`,
-          prompt: 'Đơn vị đo của gia tốc trọng trường trong hệ đo lường chuẩn SI là gì?',
-          options: ['m/s²', 'm/s', 'N/kg²', 'kg.m/s'],
-          answer_key: 0,
-          explanation: 'Gia tốc trọng trường g có đơn vị đo là mét trên giây bình phương (m/s²).',
-          difficulty: params.difficulty,
-        },
-        {
-          id: `ai-q-${Date.now()}-3`,
-          prompt: 'Quỹ đạo chuyển động của một vật ném ngang trong không khí (bỏ qua sức cản) có dạng:',
-          options: [
-            'Một nhánh của đường parabol',
-            'Một đường thẳng đứng',
-            'Một đường tròn đồng tâm',
-            'Một đường cong hypebol',
-          ],
-          answer_key: 0,
-          explanation: 'Vật ném ngang có phương trình quỹ đạo y = (g / (2v0²)) * x², là một nhánh của đường parabol.',
-          difficulty: params.difficulty,
-        }
-      )
-    } else if (isEnglish) {
-      questions.push(
-        {
-          id: `ai-q-${Date.now()}-1`,
-          prompt: 'Choose the correct sentence in Present Perfect tense:',
-          options: [
-            'She has lived here for five years.',
-            'She is living here since five years.',
-            'She lived here for five years ago.',
-            'She has live here since five years.',
-          ],
-          answer_key: 0,
-          explanation: 'Present perfect uses "has/have + V3/ed", and "for" is used with a period of time.',
-          difficulty: params.difficulty,
-        },
-        {
-          id: `ai-q-${Date.now()}-2`,
-          prompt: 'Which word is closest in meaning to "INTENTIONAL"?',
-          options: ['Deliberate', 'Accidental', 'Casual', 'Spontaneous'],
-          answer_key: 0,
-          explanation: '"Intentional" and "Deliberate" both mean done on purpose.',
-          difficulty: params.difficulty,
-        }
-      )
-    } else {
-      questions.push(
-        {
-          id: `ai-q-${Date.now()}-1`,
-          prompt: `Dựa vào tài liệu về "${params.courseTitle}", khẳng định nào sau đây là chính xác nhất?`,
-          options: [
-            'Khái niệm được xây dựng dựa trên nguyên lý nền tảng và có tính ứng dụng cao.',
-            'Phương pháp chỉ áp dụng được trong môi trường lý thuyết đơn thuần.',
-            'Không cần kiểm tra điều kiện xác định trước khi tính toán.',
-            'Kết quả phụ thuộc ngẫu nhiên vào dữ liệu đầu vào.',
-          ],
-          answer_key: 0,
-          explanation: 'Nguyên lý cốt lõi của bài học tập trung vào tính hệ thống và khả năng ứng dụng thực tiễn.',
-          difficulty: params.difficulty,
-        },
-        {
-          id: `ai-q-${Date.now()}-2`,
-          prompt: 'Bước đầu tiên trong quy trình giải quyết vấn đề của chủ đề này là gì?',
-          options: [
-            'Xác định tập xác định và giả thiết đầu vào của bài toán.',
-            'Bỏ qua các giả thiết và áp dụng ngay công thức mở rộng.',
-            'Tính toán kết quả cuối cùng trước khi lập bảng biến thiên.',
-            'Lấy mẫu ngẫu nhiên không cần kiểm chứng.',
-          ],
-          answer_key: 0,
-          explanation: 'Quy tắc cơ bản luôn bắt đầu bằng việc đọc kỹ giả thiết và xác định phạm vi áp dụng.',
-          difficulty: params.difficulty,
-        }
+    const facts = [...new Map(splitSentences(content).map((s) => [norm(s), toFact(s)])).values()]
+    const warnings: string[] = []
+    if (facts.length < 4) {
+      throw new AIInputError(
+        'Tài liệu quá ngắn hoặc chưa tách được ý: cần ít nhất 4 câu/ý rõ ràng (mỗi ý một dòng hoặc kết thúc bằng dấu chấm).'
       )
     }
 
-    // Trả về đúng số lượng câu hỏi mong muốn
-    return questions.slice(0, Math.min(params.questionsCount, questions.length))
+    const builders =
+      params.difficulty === 'easy'
+        ? [definitionQuestion, trueStatementQuestion]
+        : params.difficulty === 'hard'
+        ? [falseStatementQuestion, trueStatementQuestion, definitionQuestion]
+        : [definitionQuestion, trueStatementQuestion, falseStatementQuestion]
+
+    const questions: AIQuizQuestion[] = []
+    const usedPrompts = new Set<string>()
+    const usedFacts = new Set<Fact>()
+
+    // Vòng 1: mỗi ý tối đa 1 câu hỏi; vòng 2: cho phép dạng câu hỏi khác trên cùng ý
+    for (let round = 0; round < builders.length && questions.length < count; round++) {
+      for (const fact of shuffle(facts)) {
+        if (questions.length >= count) break
+        if (round === 0 && usedFacts.has(fact)) continue
+        for (let k = 0; k < builders.length; k++) {
+          const build = builders[(k + round) % builders.length]
+          const q = build(fact, facts, params.difficulty)
+          if (!q) continue
+          const key = norm(q.prompt + '|' + q.options[q.answer_key])
+          if (usedPrompts.has(key)) continue
+          usedPrompts.add(key)
+          usedFacts.add(fact)
+          questions.push(q)
+          break
+        }
+      }
+    }
+
+    if (questions.length === 0) {
+      throw new AIInputError(
+        'Không sinh được câu hỏi từ tài liệu này. Hãy viết các ý dạng định nghĩa ("X là Y") hoặc nhận định rõ ràng, mỗi ý một dòng.'
+      )
+    }
+    if (questions.length < count) {
+      warnings.push(
+        `Tài liệu chỉ đủ ý để sinh ${questions.length}/${count} câu hỏi. Hãy bổ sung thêm nội dung hoặc tự thêm câu hỏi.`
+      )
+    }
+    warnings.push('Câu hỏi do AI mô phỏng tạo từ tài liệu — vui lòng kiểm tra kỹ nội dung, đáp án và giải thích trước khi xuất bản.')
+    return { questions, warnings }
   },
 
   /**
@@ -196,7 +299,7 @@ export const aiService = {
       return `Chào bạn! Về chủ đề **Hàm số bậc hai $y = ax^2 + bx + c$ ($a \\neq 0$)**, đây là 3 điểm mấu chốt bạn cần nhớ:
 1. **Đỉnh Parabol:** Điểm $I\\left(-\\frac{b}{2a}; -\\frac{\\Delta}{4a}\\right)$. Đây là điểm cao nhất khi $a < 0$ và thấp nhất khi $a > 0$.
 2. **Trục đối xứng:** Đường thẳng thẳng đứng $x = -\\frac{b}{2a}$.
-3. **Chiều biến thiên:** 
+3. **Chiều biến thiên:**
    - Nếu $a > 0$: Nghịch biến trên $\\left(-\\infty; -\\frac{b}{2a}\\right)$ và đồng biến trên $\\left(-\\frac{b}{2a}; +\\infty\\right)$.
    - Nếu $a < 0$: Đồng biến trên $\\left(-\\infty; -\\frac{b}{2a}\\right)$ và nghịch biến trên $\\left(-\\frac{b}{2a}; +\\infty\\right)$.
 

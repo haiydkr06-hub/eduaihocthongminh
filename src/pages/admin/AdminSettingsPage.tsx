@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { readPrefs, writePrefs } from '../../lib/localPrefs'
 import {
   Save,
   Globe,
@@ -8,24 +9,43 @@ import {
 } from 'lucide-react'
 
 export function AdminSettingsPage() {
-  const [platformName, setPlatformName] = useState('EduAI')
-  const [slogan, setSlogan] = useState('HỌC THÔNG MINH, TIẾN BỘ MỖI NGÀY')
-  const [contactEmail, setContactEmail] = useState('support@eduai.vn')
-  const [allowPublicRegister, setAllowPublicRegister] = useState(true)
-  const [requireEmailVerify, setRequireEmailVerify] = useState(false)
-  const [aiModel, setAiModel] = useState('gemini-1.5-flash')
-  const [quizMaxQuestions, setQuizMaxQuestions] = useState(20)
+  const [initial] = useState(() =>
+    readPrefs('eduai_system_settings', {
+      platformName: 'EduAI',
+      slogan: 'HỌC THÔNG MINH, TIẾN BỘ MỖI NGÀY',
+      contactEmail: 'support@eduai.vn',
+      allowPublicRegister: true,
+      requireEmailVerify: false,
+      aiModel: 'local-simulator',
+      quizMaxQuestions: 20,
+    })
+  )
+  const [platformName, setPlatformName] = useState(initial.platformName)
+  const [slogan, setSlogan] = useState(initial.slogan)
+  const [contactEmail, setContactEmail] = useState(initial.contactEmail)
+  const [allowPublicRegister, setAllowPublicRegister] = useState(initial.allowPublicRegister)
+  const [requireEmailVerify, setRequireEmailVerify] = useState(initial.requireEmailVerify)
+  const [aiModel, setAiModel] = useState(initial.aiModel)
+  const [quizMaxQuestions, setQuizMaxQuestions] = useState(initial.quizMaxQuestions)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
+  // Lưu thật vào thiết bị (trước đây chỉ chờ 0,5 giây rồi báo thành công mà không lưu gì)
   const handleSave = (e: FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    setTimeout(() => {
-      setSaving(false)
-      setNotice('Đã lưu cấu hình hệ thống thành công!')
-      setTimeout(() => setNotice(null), 3000)
-    }, 500)
+    writePrefs('eduai_system_settings', {
+      platformName: platformName.trim(),
+      slogan: slogan.trim(),
+      contactEmail: contactEmail.trim(),
+      allowPublicRegister,
+      requireEmailVerify,
+      aiModel,
+      quizMaxQuestions,
+    })
+    setSaving(false)
+    setNotice('Đã lưu cấu hình trên thiết bị này. (Đăng ký / xác thực email thực tế được cấu hình trong Supabase Auth.)')
+    setTimeout(() => setNotice(null), 4000)
   }
 
   return (
@@ -150,9 +170,10 @@ export function AdminSettingsPage() {
                 onChange={(e) => setAiModel(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-[#f7f8fc] border border-[#eceef4] rounded-xl text-xs focus:outline-none focus:border-[#6857DF]"
               >
-                <option value="gemini-1.5-flash">Google Gemini 1.5 Flash (Nhanh & Tối ưu)</option>
-                <option value="gemini-1.5-pro">Google Gemini 1.5 Pro (Chuyên sâu)</option>
-                <option value="gpt-4o-mini">OpenAI GPT-4o Mini</option>
+                <option value="local-simulator">AI mô phỏng cục bộ (đang sử dụng)</option>
+                <option value="gemini-1.5-flash" disabled>Google Gemini 1.5 Flash (chưa kết nối)</option>
+                <option value="gemini-1.5-pro" disabled>Google Gemini 1.5 Pro (chưa kết nối)</option>
+                <option value="gpt-4o-mini" disabled>OpenAI GPT-4o Mini (chưa kết nối)</option>
               </select>
             </div>
 

@@ -1,8 +1,40 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { studentService, type StudentLessonItem } from '../../services/studentService'
+import { studentService, type StudentLessonItem, type StudentQuizItem } from '../../services/studentService'
 import { useAuth } from '../../hooks/useAuth'
 import { AITutorChat } from '../../components/AITutorChat'
+import { MarkdownContent } from '../../components/MarkdownContent'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
+
+const NOTES_KEY = 'eduai_lesson_notes'
+
+function readNote(userId: string | undefined, lessonId: string | undefined): string {
+  if (!userId || !lessonId) return ''
+  try {
+    const all = JSON.parse(localStorage.getItem(NOTES_KEY) || '{}') as Record<string, string>
+    return all[`${userId}:${lessonId}`] || ''
+  } catch {
+    return ''
+  }
+}
+
+function writeNote(userId: string, lessonId: string, text: string) {
+  let all: Record<string, string> = {}
+  try {
+    all = JSON.parse(localStorage.getItem(NOTES_KEY) || '{}') as Record<string, string>
+  } catch {
+    all = {}
+  }
+  all[`${userId}:${lessonId}`] = text
+  localStorage.setItem(NOTES_KEY, JSON.stringify(all))
+}
+
+/** Chuyển link YouTube dạng watch/youtu.be sang dạng embed để nhúng được. */
+function toEmbedUrl(url?: string): string | null {
+  if (!url) return null
+  const m = /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{6,})/.exec(url)
+  return m ? `https://www.youtube.com/embed/${m[1]}` : null
+}
 
 export function LearningPage() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>()
@@ -16,38 +48,44 @@ export function LearningPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'notes' | 'resources'>('overview')
   const [savingProgress, setSavingProgress] = useState(false)
   const [completedNotice, setCompletedNotice] = useState(false)
-  const [videoSpeed, setVideoSpeed] = useState<number>(1)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [quizzes, setQuizzes] = useState<StudentQuizItem[]>([])
+  const [noteDraft, setNoteDraft] = useState<{ lessonId: string; text: string } | null>(null)
+  const [noteSaved, setNoteSaved] = useState(false)
 
   // Tải danh sách bài học của khóa học
   useEffect(() => {
+    if (!courseId || !user?.id) return
     let active = true
-    const cid = courseId || 'tc-1'
 
     studentService
-      .getLessons(cid, user?.id)
+      .getLessons(courseId, user.id)
       .then((data) => {
         if (!active) return
         setLessons(data)
-        
-        // Xác định bài học hiện tại dựa theo lessonId trên URL
+        setLoadError(null)
         if (lessonId) {
           const foundIdx = data.findIndex((l) => l.id === lessonId)
-          if (foundIdx !== -1) {
-            setCurrentIdx(foundIdx)
-          } else {
-            setCurrentIdx(0)
-          }
+          setCurrentIdx(foundIdx !== -1 ? foundIdx : 0)
         } else {
           // Mặc định chọn bài học chưa hoàn thành đầu tiên, hoặc bài 0
           const firstUncompleted = data.findIndex((l) => !l.is_completed)
           setCurrentIdx(firstUncompleted !== -1 ? firstUncompleted : 0)
         }
-        setLoading(false)
       })
       .catch((err) => {
-        console.warn('Lỗi tải danh sách bài học:', err)
+        if (active) setLoadError(getFriendlyErrorMessage(err, 'Không thể tải bài học của khóa này.'))
+      })
+      .finally(() => {
         if (active) setLoading(false)
       })
+
+    // Bài kiểm tra của khóa (không chặn việc học nếu lỗi)
+    studentService
+      .getMyQuizzes(user.id, courseId)
+      .then((q) => active && setQuizzes(q))
+      .catch(() => active && setQuizzes([]))
 
     return () => {
       active = false
@@ -62,42 +100,44 @@ export function LearningPage() {
     setCurrentIdx(idx)
     const targetLesson = lessons[idx]
     if (targetLesson) {
-      navigate(`/student/learning/${courseId || 'tc-1'}/${targetLesson.id}`, { replace: true })
+      navigate(`/student/learning/${courseId}/${targetLesson.id}`, { replace: true })
     }
   }
 
   // Đánh dấu hoàn thành bài học và chuyển tiếp sang bài sau
   const handleCompleteAndNext = async () => {
-    if (!currentLesson || savingProgress) return
+    if (!currentLesson || savingProgress || !user?.id) return
     setSavingProgress(true)
+    setActionError(null)
 
     try {
-      // 1. Lưu vào bảng lesson_progress trên Supabase (hoặc fallback)
-      if (user?.id) {
-        await studentService.markLessonComplete(user.id, currentLesson.id)
-      }
+      // 1. Lưu tiến độ — chỉ hiện dấu tích khi lưu thành công thật
+      await studentService.markLessonComplete(user.id, currentLesson.id)
+      setLessons((prev) => prev.map((l, idx) => (idx === currentIdx ? { ...l, is_completed: true } : l)))
 
-      // 2. Cập nhật state cục bộ để hiện icon tích xanh hoàn thành
-      setLessons((prev) =>
-        prev.map((l, idx) => (idx === currentIdx ? { ...l, is_completed: true } : l))
-      )
-
-      // 3. Tự động chuyển sang bài tiếp theo
+      // 2. Tự động chuyển sang bài tiếp theo
       if (currentIdx < lessons.length - 1) {
         const nextIdx = currentIdx + 1
         setCurrentIdx(nextIdx)
-        const nextLesson = lessons[nextIdx]
-        navigate(`/student/learning/${courseId || 'tc-1'}/${nextLesson.id}`, { replace: true })
+        navigate(`/student/learning/${courseId}/${lessons[nextIdx].id}`, { replace: true })
       } else {
-        // Đã hoàn thành bài học cuối cùng của khóa
         setCompletedNotice(true)
       }
     } catch (err) {
-      console.warn('Lỗi lưu tiến độ bài học:', err)
+      setActionError(getFriendlyErrorMessage(err, 'Không lưu được tiến độ. Vui lòng thử lại.'))
     } finally {
       setSavingProgress(false)
     }
   }
+
+  const noteText = noteDraft && noteDraft.lessonId === currentLesson?.id ? noteDraft.text : readNote(user?.id, currentLesson?.id)
+  const handleSaveNote = () => {
+    if (!user?.id || !currentLesson) return
+    writeNote(user.id, currentLesson.id, noteText)
+    setNoteSaved(true)
+    setTimeout(() => setNoteSaved(false), 2000)
+  }
+  const embedUrl = toEmbedUrl(currentLesson?.video_url)
 
   const completedCount = lessons.filter((l) => l.is_completed).length
   const progressPercent = lessons.length > 0 ? Math.round((completedCount / lessons.length) * 100) : 0
@@ -123,10 +163,10 @@ export function LearningPage() {
 
           <div className="min-w-0">
             <div className="text-xs sm:text-sm font-bold text-white truncate flex items-center gap-2">
-              <span>{currentLesson ? currentLesson.title : 'Đang tải bài giảng...'}</span>
+              <span>{currentLesson ? currentLesson.title : loading ? 'Đang tải bài giảng...' : 'Không có bài học để hiển thị'}</span>
             </div>
             <div className="text-[11px] text-gray-400 hidden md:block">
-              Bài {currentIdx + 1} / {lessons.length} • Khóa học trực tuyến EduAI
+              {lessons.length > 0 ? `Bài ${currentIdx + 1} / ${lessons.length} • ` : ''}Khóa học trực tuyến EduAI
             </div>
           </div>
         </div>
@@ -178,9 +218,9 @@ export function LearningPage() {
               
               {/* TRÌNH PHÁT VIDEO PLAYER CHUYÊN NGHIỆP */}
               <div className="relative aspect-video w-full bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800 flex items-center justify-center group">
-                {currentLesson.video_url && currentLesson.video_url.includes('youtube') ? (
+                {embedUrl ? (
                   <iframe
-                    src={currentLesson.video_url}
+                    src={embedUrl}
                     className="w-full h-full"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
@@ -188,44 +228,13 @@ export function LearningPage() {
                   />
                 ) : (
                   <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-slate-900 to-black">
-                    {/* Minh họa bài giảng video */}
                     <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:16px_16px]" />
-                    
                     <div className="text-center z-10 px-4">
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-primary-600/90 text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-600/40 transform transition hover:scale-110 cursor-pointer">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 sm:h-10 sm:w-10 translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-base sm:text-xl font-bold text-white mb-2">
-                        {currentLesson.title}
-                      </h3>
+                      <div className="text-4xl mb-3" aria-hidden="true">📖</div>
+                      <h3 className="text-base sm:text-xl font-bold text-white mb-2">{currentLesson.title}</h3>
                       <p className="text-xs sm:text-sm text-gray-400 max-w-md mx-auto">
-                        Thời lượng bài giảng: {currentLesson.duration_minutes || 20} phút • Độ phân giải cao 1080p
+                        Bài học dạng đọc • Thời lượng ước tính {currentLesson.duration_minutes || 0} phút. Nội dung chi tiết ở bên dưới.
                       </p>
-                    </div>
-
-                    {/* Thanh điều khiển video dưới đáy player */}
-                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 flex items-center justify-between text-xs text-white">
-                      <div className="flex items-center gap-3">
-                        <button type="button" className="hover:text-primary-400 transition">▶ Phát</button>
-                        <span>04:15 / {currentLesson.duration_minutes || 20}:00</span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-gray-400">Tốc độ:</span>
-                          <button
-                            type="button"
-                            onClick={() => setVideoSpeed((prev) => (prev === 1 ? 1.25 : prev === 1.25 ? 1.5 : 1))}
-                            className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 font-mono font-bold"
-                          >
-                            {videoSpeed}x
-                          </button>
-                        </div>
-                        <button type="button" className="hover:text-primary-400 transition" title="Toàn màn hình">
-                          ⛶
-                        </button>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -266,7 +275,7 @@ export function LearningPage() {
                           : 'text-gray-400 hover:text-white hover:bg-gray-800'
                       }`}
                     >
-                      Tài liệu đính kèm
+                      Bài kiểm tra ({quizzes.length})
                     </button>
                   </div>
 
@@ -280,8 +289,12 @@ export function LearningPage() {
                     <h2 className="text-lg sm:text-xl font-extrabold text-white">
                       {currentLesson.title}
                     </h2>
-                    <div className="prose prose-invert max-w-none text-xs sm:text-sm text-gray-300 leading-relaxed space-y-3">
-                      <p>{currentLesson.content || 'Nội dung bài giảng đang được cập nhật thêm tài liệu chi tiết.'}</p>
+                    <div className="max-w-none text-xs sm:text-sm text-gray-300 leading-relaxed space-y-3">
+                      {currentLesson.content ? (
+                        <MarkdownContent text={currentLesson.content} />
+                      ) : (
+                        <p>Nội dung bài giảng đang được cập nhật.</p>
+                      )}
                       
                       <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800">
                         <h4 className="text-sm font-bold text-primary-400 mb-2 flex items-center gap-2">
@@ -302,13 +315,18 @@ export function LearningPage() {
                     <p className="text-xs text-gray-400">
                       Ghi lại các công thức và thắc mắc của bạn trong quá trình học tập.
                     </p>
+                    <label htmlFor="lesson-note" className="sr-only">Ghi chú bài học</label>
                     <textarea
+                      id="lesson-note"
                       rows={4}
+                      value={noteText}
+                      onChange={(e) => currentLesson && setNoteDraft({ lessonId: currentLesson.id, text: e.target.value })}
                       placeholder="Ghi chú bài học của bạn tại đây..."
                       className="w-full p-3 rounded-xl bg-gray-900/90 border border-gray-700 text-xs sm:text-sm text-white focus:outline-none focus:border-primary-500"
                     />
-                    <div className="flex justify-end">
-                      <button type="button" className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-semibold hover:bg-primary-500 transition">
+                    <div className="flex items-center justify-end gap-3">
+                      {noteSaved && <span className="text-xs text-emerald-400" role="status">✓ Đã lưu ghi chú</span>}
+                      <button type="button" onClick={handleSaveNote} className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-semibold hover:bg-primary-500 transition">
                         Lưu ghi chú
                       </button>
                     </div>
@@ -317,26 +335,43 @@ export function LearningPage() {
 
                 {activeTab === 'resources' && (
                   <div className="space-y-2">
-                    <div className="p-3 rounded-xl bg-gray-900/70 border border-gray-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-lg">📄</span>
-                        <div>
-                          <div className="font-semibold text-white">Slide bài giảng tóm tắt.pdf</div>
-                          <div className="text-[10px] text-gray-400">2.4 MB • Giáo trình EduAI</div>
+                    {quizzes.length === 0 ? (
+                      <p className="text-xs text-gray-400">Khóa học này chưa có bài kiểm tra nào được xuất bản.</p>
+                    ) : (
+                      quizzes.map((q) => (
+                        <div key={q.id} className="p-3 rounded-xl bg-gray-900/70 border border-gray-800 flex items-center justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-white truncate">📝 {q.title}</div>
+                            <div className="text-[11px] text-gray-400">
+                              {q.questions_count} câu • {q.time_limit_minutes} phút • Đạt từ {q.pass_score} điểm
+                              {q.bestScore !== null && ` • Điểm cao nhất của bạn: ${Math.round(q.bestScore)}`}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/student/quiz/${q.id}`)}
+                            className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-primary-600 text-white font-semibold hover:bg-primary-500"
+                          >
+                            {q.attempts > 0 ? 'Làm lại' : 'Làm bài'}
+                          </button>
                         </div>
-                      </div>
-                      <button type="button" className="text-primary-400 hover:text-primary-300 font-semibold text-xs">
-                        Tải về ↓
-                      </button>
-                    </div>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
 
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-              Không tìm thấy bài học phù hợp.
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-sm text-gray-300 p-6 text-center" role={loadError ? 'alert' : undefined}>
+              <p>{loadError || 'Khóa học này chưa có bài học nào.'}</p>
+              <button
+                type="button"
+                onClick={() => navigate('/student/courses')}
+                className="px-4 py-2 rounded-xl bg-primary-600 text-white text-xs font-bold hover:bg-primary-500"
+              >
+                Về danh sách khóa học
+              </button>
             </div>
           )}
         </div>
@@ -421,15 +456,23 @@ export function LearningPage() {
           ← Bài trước
         </button>
 
-        <div className="text-xs text-gray-400 hidden sm:block">
-          Bài {currentIdx + 1} / {lessons.length}: <strong className="text-gray-200">{currentLesson?.title}</strong>
-        </div>
+        {actionError ? (
+          <div className="text-xs text-red-400 px-2" role="alert">{actionError}</div>
+        ) : (
+          <div className="text-xs text-gray-400 hidden sm:block">
+            {currentLesson && (
+              <>
+                Bài {currentIdx + 1} / {lessons.length}: <strong className="text-gray-200">{currentLesson.title}</strong>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Nút Hoàn thành và Tiếp tục */}
         <button
           type="button"
           onClick={handleCompleteAndNext}
-          disabled={savingProgress}
+          disabled={savingProgress || !currentLesson}
           className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-emerald-600/25 transition active:scale-95 disabled:opacity-50 flex items-center gap-2"
         >
           {savingProgress ? (
@@ -468,10 +511,13 @@ export function LearningPage() {
               </button>
               <button
                 type="button"
-                onClick={() => navigate('/student/courses')}
+                onClick={() => {
+                  setCompletedNotice(false)
+                  setActiveTab('resources')
+                }}
                 className="px-5 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold shadow-md transition"
               >
-                Về danh sách khóa học
+                Làm bài kiểm tra
               </button>
             </div>
           </div>

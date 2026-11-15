@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
+import { MarkdownContent } from './MarkdownContent'
 import { aiService } from '../services/aiService'
 
 interface AITutorChatProps {
@@ -216,13 +217,13 @@ export function AITutorChat({ lessonTitle, defaultOpen = false }: AITutorChatPro
 
                   <div className={`max-w-[85%] ${isAssistant ? '' : 'text-right'}`}>
                     <div
-                      className={`p-3 rounded-2xl shadow-2xs leading-relaxed whitespace-pre-wrap ${
+                      className={`p-3 rounded-2xl shadow-2xs leading-relaxed ${
                         isAssistant
                           ? 'bg-white text-gray-800 border border-gray-200/80 rounded-tl-xs'
                           : 'bg-primary-600 text-white rounded-tr-xs text-left'
                       }`}
                     >
-                      {msg.text}
+                      {isAssistant ? <MarkdownContent text={msg.text} /> : <span className="whitespace-pre-wrap">{msg.text}</span>}
                     </div>
                     <div className="text-[10px] text-gray-400 mt-1 px-1">
                       {msg.time}

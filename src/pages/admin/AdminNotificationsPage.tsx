@@ -7,6 +7,7 @@ import {
   CheckCircle,
   Check,
 } from 'lucide-react'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 import { adminService, type SystemNotificationItem } from '../../services/adminService'
 
 export function AdminNotificationsPage() {
@@ -19,53 +20,44 @@ export function AdminNotificationsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
-  const refreshNotifications = async () => {
-    const data = await adminService.getNotifications()
-    setNotifications(data)
-  }
+  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let active = true
-    adminService.getNotifications()
-      .then((data) => {
-        if (active) {
-          setNotifications(data)
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
-      })
+    adminService
+      .getNotifications()
+      .then((data) => active && setNotifications(data))
+      .catch((err) => active && setError(getFriendlyErrorMessage(err, 'Không thể tải lịch sử thông báo.')))
+      .finally(() => active && setLoading(false))
     return () => {
       active = false
     }
-  }, [])
+  }, [reloadKey])
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault()
+    if (submitting) return
+    setError(null)
     if (!title.trim() || !message.trim()) {
-      alert('Vui lòng nhập đầy đủ tiêu đề và nội dung thông báo')
+      setError('Vui lòng nhập đầy đủ tiêu đề và nội dung thông báo.')
       return
     }
 
     setSubmitting(true)
     try {
-      const success = await adminService.createNotification(title, message, type, target)
-
-      if (success) {
-        setNotice('Đã gửi thông báo hệ thống tới các người dùng thành công!')
-        setTitle('')
-        setMessage('')
-        refreshNotifications()
-        setTimeout(() => setNotice(null), 3000)
-      } else {
-        alert('Không thể gửi thông báo')
-      }
+      const recipients = await adminService.createNotification(title, message, type, target)
+      setNotice(
+        recipients > 0
+          ? `Đã gửi thông báo hệ thống${recipients > 1 ? ` tới ${recipients} người dùng` : ''} thành công!`
+          : 'Không có người dùng nào thuộc nhóm nhận đã chọn.'
+      )
+      setTitle('')
+      setMessage('')
+      setReloadKey((k) => k + 1)
+      setTimeout(() => setNotice(null), 3000)
     } catch (err) {
-      console.error('Lỗi khi gửi thông báo:', err)
-      alert('Đã xảy ra lỗi khi gửi thông báo. Vui lòng thử lại.')
+      setError(getFriendlyErrorMessage(err, 'Đã xảy ra lỗi khi gửi thông báo. Vui lòng thử lại.'))
     } finally {
       setSubmitting(false)
     }
@@ -93,6 +85,9 @@ export function AdminNotificationsPage() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -218,7 +213,11 @@ export function AdminNotificationsPage() {
                           ? 'Gửi toàn bộ'
                           : n.target === 'students'
                           ? 'Chỉ Học viên'
-                          : 'Chỉ Giảng viên'}
+                          : n.target === 'teachers'
+                          ? 'Chỉ Giảng viên'
+                          : n.target === 'admins'
+                          ? 'Quản trị viên'
+                          : 'Gửi đích danh'}
                       </span>
                     </div>
                   </div>

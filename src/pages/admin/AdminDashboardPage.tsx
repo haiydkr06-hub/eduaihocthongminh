@@ -15,31 +15,59 @@ import {
 } from 'lucide-react'
 import { adminService, type AdminStats } from '../../services/adminService'
 import { useAuth } from '../../hooks/useAuth'
+import { CountUp } from '../../components/CountUp'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 
 export function AdminDashboardPage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [now] = useState(() => Date.now())
 
   useEffect(() => {
     let active = true
-    adminService.getStats()
+    adminService
+      .getStats()
       .then((data) => {
-        if (active) {
-          setStats(data)
-          setLoading(false)
-        }
+        if (active) setStats(data)
       })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
+      .catch((err) => {
+        if (active) setError(getFriendlyErrorMessage(err, 'Không thể tải số liệu hệ thống.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
       })
     return () => {
       active = false
     }
   }, [])
+
+  const timeAgo = (iso: string) => {
+    const diffMin = Math.floor((now - new Date(iso).getTime()) / 60000)
+    if (diffMin < 1) return 'Vừa xong'
+    if (diffMin < 60) return `${diffMin} phút trước`
+    const h = Math.floor(diffMin / 60)
+    if (h < 24) return `${h} giờ trước`
+    const d = Math.floor(h / 24)
+    return d < 30 ? `${d} ngày trước` : new Date(iso).toLocaleDateString('vi-VN')
+  }
+
+  const activityIcon = (kind: 'attempt' | 'enrollment' | 'course') =>
+    kind === 'attempt' ? (
+      <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <CheckCircle2 className="w-4 h-4" />
+      </div>
+    ) : kind === 'enrollment' ? (
+      <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Users className="w-4 h-4" />
+      </div>
+    ) : (
+      <div className="w-8 h-8 rounded-full bg-purple-50 text-[#6857DF] flex items-center justify-center flex-shrink-0 mt-0.5">
+        <BookOpen className="w-4 h-4" />
+      </div>
+    )
 
   return (
     <div className="space-y-6">
@@ -73,6 +101,10 @@ export function AdminDashboardPage() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
+
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="bg-white p-5 rounded-2xl border border-[#eceef4] shadow-sm hover:shadow-md transition">
@@ -81,12 +113,12 @@ export function AdminDashboardPage() {
               <Users className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> +12%
+              <TrendingUp className="w-3 h-3" /> {stats ? `+${stats.newStudents30d} / 30 ngày` : '…'}
             </span>
           </div>
           <p className="text-xs font-medium text-[#777a91]">Tổng học viên đăng ký</p>
           <h3 className="text-2xl font-black text-[#252641] mt-1">
-            {loading ? '...' : stats?.totalStudents} <span className="text-xs font-normal text-gray-500">học viên</span>
+            <CountUp value={loading ? null : stats?.totalStudents} /> <span className="text-xs font-normal text-gray-500">học viên</span>
           </h3>
         </div>
 
@@ -101,7 +133,7 @@ export function AdminDashboardPage() {
           </div>
           <p className="text-xs font-medium text-[#777a91]">Giảng viên phụ trách</p>
           <h3 className="text-2xl font-black text-[#252641] mt-1">
-            {loading ? '...' : stats?.totalTeachers} <span className="text-xs font-normal text-gray-500">giảng viên</span>
+            <CountUp value={loading ? null : stats?.totalTeachers} /> <span className="text-xs font-normal text-gray-500">giảng viên</span>
           </h3>
         </div>
 
@@ -116,7 +148,7 @@ export function AdminDashboardPage() {
           </div>
           <p className="text-xs font-medium text-[#777a91]">Khóa học trên hệ thống</p>
           <h3 className="text-2xl font-black text-[#252641] mt-1">
-            {loading ? '...' : stats?.totalCourses} <span className="text-xs font-normal text-gray-500">khóa</span>
+            <CountUp value={loading ? null : stats?.totalCourses} /> <span className="text-xs font-normal text-gray-500">khóa</span>
           </h3>
         </div>
 
@@ -126,12 +158,12 @@ export function AdminDashboardPage() {
               <ClipboardCheck className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
-              {stats?.averageCompletionRate}% Đạt
+              {stats?.passRate != null ? `${stats.passRate}% đạt` : 'Chưa có lượt'}
             </span>
           </div>
           <p className="text-xs font-medium text-[#777a91]">Lượt nộp bài kiểm tra</p>
           <h3 className="text-2xl font-black text-[#252641] mt-1">
-            {loading ? '...' : stats?.totalAttempts} <span className="text-xs font-normal text-gray-500">lượt</span>
+            <CountUp value={loading ? null : stats?.totalAttempts} /> <span className="text-xs font-normal text-gray-500">lượt</span>
           </h3>
         </div>
       </div>
@@ -198,25 +230,33 @@ export function AdminDashboardPage() {
             </div>
 
             <div className="space-y-3">
-              <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-5 h-5" />
+              {loading ? (
+                <p className="text-xs text-[#777a91]">Đang tải…</p>
+              ) : !stats || stats.pendingCourses.length === 0 ? (
+                <p className="text-xs text-[#777a91]">Không có khóa học nào đang chờ duyệt.</p>
+              ) : (
+                stats.pendingCourses.slice(0, 4).map((c) => (
+                  <div key={c.id} className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+                        <AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-[#252641] truncate">{c.title}</h3>
+                        <p className="text-xs text-[#777a91]">
+                          Giảng viên: {c.instructor_name} • {c.lessons_count} bài giảng • Môn: {c.category}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => navigate('/admin/courses')}
+                      className="px-3 py-1.5 bg-[#6857DF] hover:bg-[#5144BE] text-white text-xs font-semibold rounded-lg transition flex-shrink-0"
+                    >
+                      Kiểm duyệt
+                    </button>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-[#252641]">Lập trình tư duy logic với AI</h3>
-                    <p className="text-xs text-[#777a91]">Giảng viên: Thầy Trần Thanh Bình • 12 bài giảng • Môn: Công nghệ</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => navigate('/admin/courses')}
-                    className="px-3 py-1.5 bg-[#6857DF] hover:bg-[#5144BE] text-white text-xs font-semibold rounded-lg transition"
-                  >
-                    Kiểm duyệt
-                  </button>
-                </div>
-              </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -226,53 +266,21 @@ export function AdminDashboardPage() {
           <div className="bg-white rounded-2xl border border-[#eceef4] p-6 shadow-sm">
             <h2 className="text-base font-bold text-[#252641] mb-4">Nhật ký hoạt động hệ thống</h2>
             <div className="space-y-4">
-              <div className="flex gap-3 items-start">
-                <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs text-[#252641]">
-                    <strong>Trần Bảo Ngọc</strong> vừa hoàn thành bài kiểm tra <em>Toán học tư duy</em> đạt 90/100 điểm.
-                  </p>
-                  <span className="text-[10px] text-gray-400">10 phút trước</span>
-                </div>
-              </div>
-
-              <div className="flex gap-3 items-start">
-                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Users className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs text-[#252641]">
-                    Học viên mới <strong>Lê Hoàng Long</strong> vừa đăng ký tài khoản thành công qua cổng học viên.
-                  </p>
-                  <span className="text-[10px] text-gray-400">45 phút trước</span>
-                </div>
-              </div>
-
-              <div className="flex gap-3 items-start">
-                <div className="w-8 h-8 rounded-full bg-purple-50 text-[#6857DF] flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <BookOpen className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs text-[#252641]">
-                    <strong>Cô Nguyễn Minh Anh</strong> vừa cập nhật nội dung bài 13: <em>Hàm số bậc hai</em>.
-                  </p>
-                  <span className="text-[10px] text-gray-400">2 giờ trước</span>
-                </div>
-              </div>
-
-              <div className="flex gap-3 items-start">
-                <div className="w-8 h-8 rounded-full bg-pink-50 text-pink-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs text-[#252641]">
-                    Cập nhật phân quyền tài khoản cho giảng viên <strong>Thầy Trần Hoàng Nam</strong>.
-                  </p>
-                  <span className="text-[10px] text-gray-400">Hôm qua</span>
-                </div>
-              </div>
+              {loading ? (
+                <p className="text-xs text-[#777a91]">Đang tải…</p>
+              ) : !stats || stats.recentActivity.length === 0 ? (
+                <p className="text-xs text-[#777a91]">Chưa có hoạt động nào.</p>
+              ) : (
+                stats.recentActivity.map((item) => (
+                  <div key={item.id} className="flex gap-3 items-start">
+                    {activityIcon(item.kind)}
+                    <div>
+                      <p className="text-xs text-[#252641]">{item.text}</p>
+                      <span className="text-[10px] text-gray-400">{timeAgo(item.at)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

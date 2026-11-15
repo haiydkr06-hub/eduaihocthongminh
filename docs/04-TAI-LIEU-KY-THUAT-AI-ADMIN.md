@@ -7,6 +7,8 @@
 
 > **Trạng thái:** Tài liệu mô tả kiến trúc mục tiêu. Repository hiện là demo frontend; schema, policies và Edge Function dưới đây là mẫu triển khai, cần đưa vào migration, kiểm thử trong Supabase project riêng và review trước production.
 
+> **Ghi chú đồng bộ với mã nguồn (16/11/2026):** vai trò Instructor được lưu trong code/database với tên `teacher`; khóa học liên kết giảng viên qua cột `teacher_id`. Schema, RLS và RPC thực tế nằm trong `supabase/migrations/` (xem `AGENTS.md` mục 5).
+
 ## 1. Kiến trúc Backend & Database (Supabase)
 
 ### 1.1. Tổng quan
@@ -437,6 +439,26 @@ supabase secrets set APP_ORIGIN=https://your-app.example
 ```
 
 `SUPABASE_URL` và `SUPABASE_ANON_KEY` được cung cấp theo môi trường Supabase; chỉ service role nếu thật sự cần mới đặt dạng secret. Ưu tiên client theo user JWT như ví dụ để RLS áp dụng. Rotate ngay nếu key bị lộ; không đưa secret vào issue, screenshot, log hoặc bundle frontend.
+
+### 3.5. Triển khai thực tế trong repository (cập nhật 16/11/2026)
+
+Mã nguồn hiện dùng **bộ máy AI kết hợp** thay cho ví dụ OpenAI ở mục 3.3:
+
+| Thành phần | Vai trò |
+|---|---|
+| `supabase/functions/ai-assist/index.ts` | Edge Function (Deno) gọi Claude bằng SDK chính thức `@anthropic-ai/sdk`, model mặc định `claude-opus-5-5`; xác thực JWT, chỉ cho `teacher`/`admin`; giới hạn kích thước dữ liệu; dữ liệu học viên được bọc trong `<data>` và coi là dữ liệu, không phải chỉ dẫn |
+| `src/services/aiEngine.ts` | Gọi Edge Function; nếu trả `AI_NOT_CONFIGURED` (chưa có key) hoặc lỗi thì tự dùng AI mô phỏng cục bộ |
+| `src/services/teacherAiService.ts` | 3 chức năng Giảng viên: phân tích câu hỏi hay sai, điểm nguy cơ học viên (0–100: không hoạt động 35%, tiến độ 25%, kết quả 30%, số lần trượt 10%) + soạn lời nhắc, gợi ý nhận xét chấm bài |
+
+Bật AI thật:
+
+```bash
+supabase secrets set ANTHROPIC_API_KEY=your-anthropic-key
+supabase secrets set APP_ORIGIN=https://your-app.example   # khuyến nghị
+supabase functions deploy ai-assist
+```
+
+Edge Function bật `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): nếu mô hình chính từ chối vì bộ lọc an toàn, server tự chạy lại trên mô hình dự phòng. Kết quả AI luôn là bản nháp; giảng viên xem/sửa trước khi gửi cho học viên.
 
 ## 4. Trang Admin
 

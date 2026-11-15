@@ -13,6 +13,8 @@
 
 > **Phạm vi tài liệu:** Đây là đặc tả nghiệp vụ/thiết kế cho sản phẩm EduAI. Mã nguồn hiện tại là demo dashboard frontend với dữ liệu mẫu; Auth, database, phân quyền, sinh quiz AI và các luồng nghiệp vụ dưới đây là kiến trúc mục tiêu, chưa được triển khai đầy đủ trong demo.
 
+> **Ghi chú đồng bộ với mã nguồn (16/11/2026):** vai trò Instructor được lưu trong code/database với tên `teacher`; khóa học liên kết giảng viên qua cột `teacher_id`. Schema, RLS và RPC thực tế nằm trong `supabase/migrations/` (xem `AGENTS.md` mục 5).
+
 ## 1. Tổng quan dự án
 
 ### 1.1. Bối cảnh

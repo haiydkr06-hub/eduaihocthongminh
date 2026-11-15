@@ -47,20 +47,22 @@ export const supabase = createClient(config.url, config.key, {
         return Promise.reject(new Error('Supabase chưa được cấu hình'))
       }
 
-      // Giới hạn timeout 3 giây cho mọi request Supabase
+      // Timeout bảo vệ: 60 giây cho Edge Function (AI cần thời gian xử lý), 20 giây cho request thường.
+      // (Trước đây cố định 3 giây -> mọi lời gọi AI/upload chậm đều bị hủy.)
+      const isFunctionCall = String(url).includes('/functions/v1/')
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 3000)
+      const timeoutId = setTimeout(() => controller.abort(), isFunctionCall ? 60_000 : 20_000)
 
       const existingSignal = options.signal
-      if (existingSignal) {
-        existingSignal.addEventListener('abort', () => controller.abort())
-      }
+      const onAbort = () => controller.abort()
+      existingSignal?.addEventListener('abort', onAbort)
 
       return fetch(url, {
         ...options,
         signal: controller.signal,
       }).finally(() => {
         clearTimeout(timeoutId)
+        existingSignal?.removeEventListener('abort', onAbort)
       })
     },
   },
@@ -72,20 +74,24 @@ export const supabase = createClient(config.url, config.key, {
  */
 export async function withTimeout<T>(
   promise: PromiseLike<T> | (() => PromiseLike<T>),
-  timeoutMs: number = 3000,
+  timeoutMs: number = 15000,
   fallbackValue?: T
 ): Promise<T> {
   const p = typeof promise === 'function' ? promise() : promise
-  return Promise.race([
-    Promise.resolve(p),
-    new Promise<T>((resolve, reject) => {
-      setTimeout(() => {
-        if (fallbackValue !== undefined) {
-          resolve(fallbackValue)
-        } else {
-          reject(new Error(`Thao tác quá thời gian chờ (${timeoutMs}ms)`))
-        }
-      }, timeoutMs)
-    }),
-  ])
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => {
+      if (fallbackValue !== undefined) {
+        resolve(fallbackValue)
+      } else {
+        reject(new Error(`Thao tác quá thời gian chờ (${timeoutMs}ms)`))
+      }
+    }, timeoutMs)
+  })
+  try {
+    return await Promise.race([Promise.resolve(p), timeout])
+  } finally {
+    // Dọn timer để không còn callback treo sau khi đã có kết quả
+    clearTimeout(timer)
+  }
 }

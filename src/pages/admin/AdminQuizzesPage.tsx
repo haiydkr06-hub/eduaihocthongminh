@@ -147,7 +147,7 @@ export function AdminQuizzesPage() {
                       <p className="font-bold text-[#252641]">{q.attempts_count} lượt làm</p>
                       {q.attempts_count > 0 ? (
                         <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
-                          <TrendingUp className="w-3 h-3" /> Điểm TB: {q.avg_score}/100
+                          <TrendingUp className="w-3 h-3" /> Điểm TB: {q.avg_score === null ? '—' : `${q.avg_score}/100`}
                         </span>
                       ) : (
                         <span className="text-gray-400">Chưa có bài nộp</span>

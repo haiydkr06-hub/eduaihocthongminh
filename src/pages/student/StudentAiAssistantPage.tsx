@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { MarkdownContent } from '../../components/MarkdownContent'
 import {
   Sparkles,
   Send,
@@ -164,7 +165,7 @@ Bạn đang quan tâm đến chủ đề nào hôm nay?`,
                     : 'bg-white border border-[#eceef4] text-[#252641] rounded-tl-none'
                 }`}
               >
-                <div className="whitespace-pre-line">{msg.content}</div>
+                {isUser ? <div className="whitespace-pre-line">{msg.content}</div> : <MarkdownContent text={msg.content} />}
 
                 <div
                   className={`mt-2 flex items-center justify-between text-[10px] ${

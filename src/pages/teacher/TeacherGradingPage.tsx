@@ -8,60 +8,87 @@ import {
   Search,
 } from 'lucide-react'
 import { teacherService, type StudentSubmission } from '../../services/teacherService'
+import { suggestFeedback } from '../../services/teacherAiService'
+import { ENGINE_LABEL, type AIResult } from '../../services/aiEngine'
+import { useAuth } from '../../hooks/useAuth'
+import { useTeacherScope } from '../../hooks/useTeacherScope'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 
 export function TeacherGradingPage() {
+  const { profile } = useAuth()
+  const scope = useTeacherScope()
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'pending' | 'graded'>('all')
   const [search, setSearch] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   // Grading modal
   const [gradingSub, setGradingSub] = useState<StudentSubmission | null>(null)
-  const [scoreInput, setScoreInput] = useState<number>(85)
+  const [scoreInput, setScoreInput] = useState<number>(0)
   const [feedbackInput, setFeedbackInput] = useState('')
   const [saving, setSaving] = useState(false)
-
-  const loadSubmissions = async () => {
-    const data = await teacherService.getSubmissions()
-    setSubmissions(data)
-    setLoading(false)
-  }
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiResult, setAiResult] = useState<AIResult | null>(null)
 
   useEffect(() => {
+    if (scope === undefined) return
     let active = true
-    teacherService.getSubmissions()
+    teacherService
+      .getSubmissions(scope)
       .then((data) => {
-        if (active) {
-          setSubmissions(data)
-          setLoading(false)
-        }
+        if (active) setSubmissions(data)
       })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
+      .catch((err) => {
+        if (active) setError(getFriendlyErrorMessage(err, 'Không thể tải danh sách bài nộp.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
       })
     return () => {
       active = false
     }
-  }, [])
+  }, [scope, reloadKey])
 
   const handleOpenGradeModal = (sub: StudentSubmission) => {
     setGradingSub(sub)
-    setScoreInput(sub.score ?? 80)
+    // Mặc định là điểm hệ thống đã chấm tự động (trước đây mặc định 80/85 dễ lưu nhầm)
+    setScoreInput(Math.round(sub.score ?? 0))
     setFeedbackInput(sub.feedback || '')
+    setAiResult(null)
+  }
+
+  // AI đọc từng câu đúng/sai của bài làm rồi soạn bản nháp nhận xét; giảng viên sửa trước khi lưu
+  const handleSuggestFeedback = async () => {
+    if (!gradingSub || aiBusy) return
+    setAiBusy(true)
+    setError(null)
+    try {
+      const detail = await teacherService.getSubmissionDetail(gradingSub.id)
+      const result = await suggestFeedback({ ...detail, score: scoreInput })
+      setFeedbackInput(result.text)
+      setAiResult(result)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'AI chưa gợi ý được nhận xét.'))
+    } finally {
+      setAiBusy(false)
+    }
   }
 
   const handleSaveGrade = async () => {
-    if (!gradingSub || saving) return
+    if (!gradingSub || saving || !profile?.id) return
     setSaving(true)
+    setError(null)
     try {
-      await teacherService.gradeSubmission(gradingSub.id, scoreInput, feedbackInput)
-      setNotice(`Đã chấm điểm thành công cho bài làm của "${gradingSub.studentName}"!`)
+      await teacherService.gradeSubmission(gradingSub.id, scoreInput, feedbackInput, profile.id)
+      setNotice(`Đã lưu điểm và nhận xét cho bài làm của "${gradingSub.studentName}"!`)
       setGradingSub(null)
-      loadSubmissions()
+      setReloadKey((k) => k + 1)
       setTimeout(() => setNotice(null), 3000)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không lưu được điểm. Vui lòng thử lại.'))
     } finally {
       setSaving(false)
     }
@@ -87,6 +114,9 @@ export function TeacherGradingPage() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -220,7 +250,7 @@ export function TeacherGradingPage() {
       {/* Grading Modal */}
       {gradingSub && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#eceef4]">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#eceef4] max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-label="Chấm điểm bài nộp">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-purple-100 text-[#6857DF] flex items-center justify-center font-bold">
                 <GraduationCap className="w-5 h-5" />
@@ -252,11 +282,28 @@ export function TeacherGradingPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#777a91] uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5 text-[#6857DF]" /> Nhận xét & Lời khuyên cho học viên
-                </label>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <label htmlFor="grading-feedback" className="text-xs font-bold text-[#777a91] uppercase tracking-wider flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-[#6857DF]" /> Nhận xét & Lời khuyên
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleSuggestFeedback()}
+                    disabled={aiBusy || saving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F0EDFF] text-[#6857DF] hover:bg-[#e4dfff] text-xs font-bold disabled:opacity-50"
+                  >
+                    ✨ {aiBusy ? 'AI đang viết…' : feedbackInput ? 'AI viết lại' : 'AI gợi ý nhận xét'}
+                  </button>
+                </div>
+                {aiResult && (
+                  <p className="text-[11px] text-[#6857DF] mb-1.5">
+                    Bản nháp do {ENGINE_LABEL[aiResult.engine]} soạn dựa trên các câu đúng/sai — hãy đọc và chỉnh sửa trước khi lưu.
+                    {aiResult.note && <span className="text-amber-700"> {aiResult.note}</span>}
+                  </p>
+                )}
                 <textarea
-                  rows={4}
+                  id="grading-feedback"
+                  rows={aiResult ? 9 : 4}
                   value={feedbackInput}
                   onChange={(e) => setFeedbackInput(e.target.value)}
                   placeholder="Ghi nhận điểm tốt và hướng dẫn học viên ôn luyện các phần chưa vững..."

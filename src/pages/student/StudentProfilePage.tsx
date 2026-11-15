@@ -12,16 +12,20 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { readPrefs, writePrefs } from '../../lib/localPrefs'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 
 export function StudentProfilePage() {
-  const { profile, signOut, updatePassword } = useAuth()
+  const { profile, signOut, updatePassword, updateProfile } = useAuth()
   const navigate = useNavigate()
 
-  const [fullName, setFullName] = useState(profile?.full_name || 'Nguyễn Minh Anh')
-  const [phone, setPhone] = useState(profile?.phone || '0987 654 321')
-  const [schoolClass, setSchoolClass] = useState('Lớp 10A1 — THPT Chuyên')
+  const prefsKey = `eduai_profile_extra:${profile?.id}`
+  const [fullName, setFullName] = useState(profile?.full_name || '')
+  const [phone, setPhone] = useState(profile?.phone || '')
+  const [schoolClass, setSchoolClass] = useState(() => readPrefs(prefsKey, { schoolClass: '' }).schoolClass)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Password update
   const [newPassword, setNewPassword] = useState('')
@@ -29,14 +33,20 @@ export function StudentProfilePage() {
   const [passNotice, setPassNotice] = useState<string | null>(null)
   const [passError, setPassError] = useState<string | null>(null)
 
-  const handleSaveProfile = (e: FormEvent) => {
+  const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSaving(true)
-    setTimeout(() => {
-      setSaving(false)
-      setNotice('Đã cập nhật thông tin hồ sơ học viên thành công!')
-      setTimeout(() => setNotice(null), 3000)
-    }, 500)
+    setError(null)
+    const { error: updErr } = await updateProfile({ full_name: fullName, phone })
+    setSaving(false)
+    if (updErr) {
+      setError(getFriendlyErrorMessage(updErr, 'Không lưu được hồ sơ.'))
+      return
+    }
+    writePrefs(prefsKey, { schoolClass: schoolClass.trim() })
+    setNotice('Đã cập nhật thông tin hồ sơ học viên thành công!')
+    setTimeout(() => setNotice(null), 3000)
   }
 
   const handleUpdatePassword = async (e: FormEvent) => {
@@ -74,6 +84,9 @@ export function StudentProfilePage() {
         </p>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />

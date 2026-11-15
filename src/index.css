@@ -1,3 +1,583 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ==========================================================================
+   EDUAI — "AURORA GLASS" DESIGN LAYER
+   Nền cực quang chuyển động + thẻ kính mờ + hiệu ứng điểm nhấn.
+   Mọi chuyển động tắt khi người dùng bật prefers-reduced-motion.
+   ========================================================================== */
+
+:root {
+  --ea-primary: #6857df;
+  --ea-primary-2: #8b7bff;
+  --ea-primary-dark: #4b3cc4;
+  --ea-pink: #ec6fb4;
+  --ea-teal: #2ec4b6;
+  --ea-amber: #f5a524;
+  --ea-ink: #1f1d3a;
+  --ea-muted: #6f7191;
+  --ea-canvas: #f5f4fd;
+  --ea-glass: rgba(255, 255, 255, 0.72);
+  --ea-glass-border: rgba(255, 255, 255, 0.85);
+  --ea-shadow: 0 1px 2px rgba(31, 29, 58, 0.04), 0 10px 30px -14px rgba(76, 61, 190, 0.22);
+  --ea-shadow-hover: 0 2px 6px rgba(31, 29, 58, 0.05), 0 22px 44px -18px rgba(104, 87, 223, 0.42);
+  --ea-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+  color: var(--ea-ink);
+  background: var(--ea-canvas);
+}
+
+h1,
+h2,
+.font-display {
+  font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+::selection {
+  background: rgba(104, 87, 223, 0.22);
+}
+
+/* Thanh cuộn mảnh, tông tím */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(104, 87, 223, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(104, 87, 223, 0.3);
+  border-radius: 999px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ea-primary);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* 1. NỀN CỰC QUANG (AURORA)                                           */
+/* ------------------------------------------------------------------ */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 600px at 100% -10%, rgba(139, 123, 255, 0.16), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(46, 196, 182, 0.1), transparent 60%),
+    var(--ea-canvas);
+}
+.aurora span {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.aurora span:nth-child(1) {
+  width: 520px;
+  height: 520px;
+  top: -140px;
+  right: 6%;
+  background: radial-gradient(circle, #b9adff 0%, transparent 70%);
+  animation: aurora-a 22s ease-in-out infinite alternate;
+}
+.aurora span:nth-child(2) {
+  width: 460px;
+  height: 460px;
+  bottom: -160px;
+  left: 18%;
+  background: radial-gradient(circle, #ffc4e4 0%, transparent 70%);
+  animation: aurora-b 26s ease-in-out infinite alternate;
+}
+.aurora span:nth-child(3) {
+  width: 380px;
+  height: 380px;
+  top: 38%;
+  right: -120px;
+  background: radial-gradient(circle, #a6f0e6 0%, transparent 70%);
+  animation: aurora-c 30s ease-in-out infinite alternate;
+}
+/* Lưới chấm mờ tạo chiều sâu */
+.aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(104, 87, 223, 0.09) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent 70%);
+}
+@keyframes aurora-a {
+  to { transform: translate(-120px, 90px) scale(1.15); }
+}
+@keyframes aurora-b {
+  to { transform: translate(140px, -80px) scale(1.2); }
+}
+@keyframes aurora-c {
+  to { transform: translate(-90px, -120px) scale(0.9); }
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. CHUYỂN TRANG: các khối trượt lên lần lượt                        */
+/* ------------------------------------------------------------------ */
+@keyframes ea-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.page-transition {
+  animation: ea-rise 0.55s var(--ea-ease) backwards;
+}
+.page-transition > * > * {
+  animation: ea-rise 0.6s var(--ea-ease) backwards;
+}
+.page-transition > * > *:nth-child(1) { animation-delay: 0.03s; }
+.page-transition > * > *:nth-child(2) { animation-delay: 0.09s; }
+.page-transition > * > *:nth-child(3) { animation-delay: 0.15s; }
+.page-transition > * > *:nth-child(4) { animation-delay: 0.21s; }
+.page-transition > * > *:nth-child(5) { animation-delay: 0.27s; }
+.page-transition > * > *:nth-child(n + 6) { animation-delay: 0.32s; }
+
+/* Thẻ trong lưới xuất hiện lần lượt */
+.eduai-main .grid > * {
+  animation: ea-rise 0.6s var(--ea-ease) backwards;
+}
+.eduai-main .grid > *:nth-child(2) { animation-delay: 0.06s; }
+.eduai-main .grid > *:nth-child(3) { animation-delay: 0.12s; }
+.eduai-main .grid > *:nth-child(4) { animation-delay: 0.18s; }
+.eduai-main .grid > *:nth-child(n + 5) { animation-delay: 0.22s; }
+
+/* ------------------------------------------------------------------ */
+/* 3. THẺ KÍNH MỜ (GLASS CARDS)                                        */
+/* ------------------------------------------------------------------ */
+.eduai-main [class~='bg-white'][class*='rounded-2xl'],
+.eduai-main [class~='bg-white'][class*='rounded-3xl'],
+.eduai-main .stat-card,
+.eduai-main .course-card,
+.eduai-main .weekly-card {
+  background-color: var(--ea-glass) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  border-color: var(--ea-glass-border) !important;
+  box-shadow: var(--ea-shadow);
+  transition:
+    transform 0.35s var(--ea-ease),
+    box-shadow 0.35s var(--ea-ease),
+    border-color 0.35s var(--ea-ease);
+}
+
+/* Nổi lên khi rê chuột: thẻ trong lưới, thẻ bài viết, thẻ thống kê/khóa học */
+.eduai-main .grid > [class~='bg-white']:hover,
+.eduai-main article[class~='bg-white']:hover,
+.eduai-main .stat-card:hover,
+.eduai-main .course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ea-shadow-hover);
+  border-color: rgba(139, 123, 255, 0.45) !important;
+}
+
+/* Hộp thoại (modal) giữ nền trắng đặc, không hiệu ứng nổi */
+.eduai-main .fixed [class~='bg-white'] {
+  background-color: #fff !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transform: none !important;
+  animation: ea-pop 0.35s var(--ea-ease) both;
+}
+@keyframes ea-pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Biểu tượng trong thẻ hơi lắc lư khi rê chuột */
+.eduai-main .grid > [class~='bg-white']:hover [class*='rounded-xl'][class*='w-1'],
+.eduai-main .stat-card:hover .stat-icon {
+  animation: ea-wiggle 0.6s var(--ea-ease);
+}
+@keyframes ea-wiggle {
+  30% { transform: rotate(-8deg) scale(1.08); }
+  60% { transform: rotate(6deg) scale(1.08); }
+}
+
+/* Hàng bảng sáng nhẹ khi rê chuột */
+.eduai-main tbody tr {
+  transition: background-color 0.2s ease;
+}
+.eduai-main tbody tr:hover {
+  background-color: rgba(104, 87, 223, 0.05);
+}
+
+/* Ô nhập: viền phát sáng khi focus */
+.eduai-main input:focus,
+.eduai-main textarea:focus,
+.eduai-main select:focus {
+  box-shadow: 0 0 0 4px rgba(104, 87, 223, 0.14);
+}
+
+/* ------------------------------------------------------------------ */
+/* 4. BANNER ĐẦU TRANG: dải màu chạy + quả cầu bay + vệt sáng           */
+/* ------------------------------------------------------------------ */
+.eduai-main [class*='from-[#6857DF]'][class*='rounded-3xl'],
+.hero-aurora {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background-image: linear-gradient(120deg, #4b3cc4 0%, #6857df 30%, #8b5cf6 55%, #c165dd 80%, #6857df 100%) !important;
+  background-size: 260% 260% !important;
+  animation: ea-gradient 14s ease-in-out infinite;
+  box-shadow: 0 24px 50px -24px rgba(104, 87, 223, 0.65);
+}
+.eduai-main [class*='from-[#6857DF]'][class*='rounded-3xl']::before,
+.hero-aurora::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 340px;
+  height: 340px;
+  right: -80px;
+  top: -140px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 65%);
+  animation: ea-float 9s ease-in-out infinite;
+}
+.eduai-main [class*='from-[#6857DF]'][class*='rounded-3xl']::after,
+.hero-aurora::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.22) 50%, transparent 65%);
+  transform: translateX(-100%);
+  animation: ea-sweep 6s ease-in-out infinite 1.2s;
+}
+@keyframes ea-gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes ea-float {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-40px, 30px); }
+}
+@keyframes ea-sweep {
+  0%, 60% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ------------------------------------------------------------------ */
+/* 5. NÚT CHÍNH: gradient + vệt sáng lướt khi rê chuột                  */
+/* ------------------------------------------------------------------ */
+.eduai-main button[class~='bg-[#6857DF]'],
+.eduai-main a[class~='bg-[#6857DF]'],
+.btn-glow {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(135deg, #8b7bff 0%, #6857df 55%, #5440d6 100%);
+  box-shadow: 0 8px 20px -8px rgba(104, 87, 223, 0.6);
+  transition: transform 0.25s var(--ea-ease), box-shadow 0.25s var(--ea-ease), filter 0.25s;
+}
+.eduai-main button[class~='bg-[#6857DF]']::after,
+.btn-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.7s var(--ea-ease);
+  pointer-events: none;
+}
+.eduai-main button[class~='bg-[#6857DF]']:hover:not(:disabled),
+.btn-glow:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px -10px rgba(104, 87, 223, 0.7);
+}
+.eduai-main button[class~='bg-[#6857DF]']:hover:not(:disabled)::after,
+.btn-glow:hover:not(:disabled)::after {
+  transform: translateX(120%);
+}
+.eduai-main button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. SIDEBAR TÍM ĐÊM                                                  */
+/* ------------------------------------------------------------------ */
+.shell-sidebar {
+  background:
+    radial-gradient(420px 260px at 0% 0%, rgba(139, 123, 255, 0.28), transparent 70%),
+    radial-gradient(360px 300px at 100% 100%, rgba(236, 111, 180, 0.18), transparent 70%),
+    linear-gradient(180deg, #17133a 0%, #1c1748 55%, #241a5a 100%);
+}
+.shell-sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(180deg, black, transparent 60%);
+}
+.shell-nav-item {
+  position: relative;
+  transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s var(--ea-ease);
+}
+.shell-nav-item:hover {
+  transform: translateX(3px);
+}
+.shell-nav-item.is-active {
+  background-image: linear-gradient(120deg, #8b7bff 0%, #6857df 60%, #a35be0 100%);
+  box-shadow: 0 10px 24px -10px rgba(139, 123, 255, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  animation: ea-nav-in 0.45s var(--ea-ease);
+}
+.shell-nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 22%;
+  bottom: 22%;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, #fff, #c9c1ff);
+  box-shadow: 0 0 12px rgba(201, 193, 255, 0.9);
+}
+@keyframes ea-nav-in {
+  from { opacity: 0.4; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Logo: viền gradient xoay + lấp lánh */
+.brand-orb {
+  position: relative;
+  isolation: isolate;
+}
+.brand-orb::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, #8b7bff, #ec6fb4, #2ec4b6, #f5a524, #8b7bff);
+  animation: ea-spin 6s linear infinite;
+}
+.brand-orb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(145deg, #2a2160, #17133a);
+}
+@keyframes ea-spin {
+  to { transform: rotate(360deg); }
+}
+.text-gradient {
+  background: linear-gradient(100deg, #ffffff 10%, #c9c1ff 45%, #ffb3dc 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.text-gradient-dark {
+  background: linear-gradient(100deg, #4b3cc4 0%, #8b5cf6 50%, #ec6fb4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Chấm "đang trực tuyến" nhấp nháy */
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0;
+  animation: ea-ping 2s ease-out infinite;
+}
+@keyframes ea-ping {
+  0% { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Thanh header kính mờ */
+.shell-header {
+  background: rgba(255, 255, 255, 0.62);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 6px 24px -18px rgba(76, 61, 190, 0.35);
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. TRANG ĐĂNG NHẬP / ĐĂNG KÝ                                         */
+/* ------------------------------------------------------------------ */
+.auth-showcase {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: linear-gradient(140deg, #17133a 0%, #2b1f74 45%, #5b3fd1 80%, #9d5be0 100%);
+  background-size: 200% 200%;
+  animation: ea-gradient 16s ease-in-out infinite;
+}
+.auth-showcase .orb {
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(50px);
+  opacity: 0.6;
+}
+.auth-showcase .orb-1 {
+  width: 360px;
+  height: 360px;
+  top: -80px;
+  right: -60px;
+  background: #ec6fb4;
+  animation: aurora-a 14s ease-in-out infinite alternate;
+}
+.auth-showcase .orb-2 {
+  width: 300px;
+  height: 300px;
+  bottom: -60px;
+  left: -40px;
+  background: #2ec4b6;
+  animation: aurora-b 18s ease-in-out infinite alternate;
+}
+.float-card {
+  animation: ea-bob 6s ease-in-out infinite;
+}
+.float-card:nth-child(2) { animation-delay: -2s; }
+.float-card:nth-child(3) { animation-delay: -4s; }
+@keyframes ea-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.auth-card {
+  animation: ea-pop 0.6s var(--ea-ease) both;
+}
+
+/* Con trỏ nhấp nháy cho chữ đang gõ */
+.typing-caret::after {
+  content: '|';
+  margin-left: 2px;
+  color: #ffb3dc;
+  animation: ea-blink 1s steps(1) infinite;
+}
+@keyframes ea-blink {
+  50% { opacity: 0; }
+}
+
+/* ------------------------------------------------------------------ */
+/* 8. TÔN TRỌNG "GIẢM CHUYỂN ĐỘNG"                                      */
+/* ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 9. DASHBOARD HỌC VIÊN: banner chào mừng dạng cực quang              */
+/* ------------------------------------------------------------------ */
+.eduai-main .page-content {
+  padding: 0;
+}
+.welcome-row.hero-aurora {
+  align-items: center;
+  padding: 30px 34px;
+  border-radius: 28px;
+  margin-bottom: 24px;
+  color: #fff;
+}
+.welcome-row.hero-aurora > * {
+  position: relative;
+  z-index: 1;
+}
+.welcome-row.hero-aurora h1 {
+  color: #fff;
+  font-size: clamp(24px, 2.4vw, 34px);
+  letter-spacing: -0.03em;
+}
+.welcome-row.hero-aurora .welcome-subtitle {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13.5px;
+}
+.welcome-row.hero-aurora .date-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+}
+.welcome-row.hero-aurora .date-dot {
+  background: #6ef2c6;
+  box-shadow: 0 0 0 4px rgba(110, 242, 198, 0.25);
+}
+.welcome-row.hero-aurora .wave {
+  color: #ffd166;
+  animation: ea-twinkle 2.4s ease-in-out infinite;
+}
+@keyframes ea-twinkle {
+  0%, 100% { transform: scale(1) rotate(0); opacity: 1; }
+  50% { transform: scale(1.35) rotate(25deg); opacity: 0.75; }
+}
+.welcome-row.hero-aurora .primary-button {
+  height: 46px;
+  padding: 0 20px;
+  color: #4b3cc4;
+  background: #fff;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 12px 26px -12px rgba(23, 19, 58, 0.55);
+}
+.welcome-row.hero-aurora .primary-button:hover {
+  background: #f3f0ff;
+  transform: translateY(-2px);
+}
+.eduai-main .stat-value {
+  font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', sans-serif;
+}
+/* Số đếm (CountUp) giữ đúng cỡ chữ của ô thống kê */
+.eduai-main .stat-value > .tabular-nums,
+.eduai-main .weekly-total .tabular-nums {
+  font-size: 1em !important;
+  font-weight: inherit !important;
+  color: inherit !important;
+  margin: 0 !important;
+  letter-spacing: inherit !important;
+}
+
+/* Lớp phủ modal: Tailwind space-y-* tự thêm margin-top cho phần tử con -> lớp phủ bị lệch xuống 24px */
+.eduai-main .fixed.inset-0 {
+  margin: 0 !important;
+}
+
+@media (max-width: 700px) {
+  .welcome-row.hero-aurora {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+    padding: 24px 22px;
+  }
+  .welcome-row.hero-aurora .primary-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

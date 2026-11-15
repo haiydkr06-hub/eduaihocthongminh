@@ -23,7 +23,8 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />
   }
 
-  const effectiveRole = (profile?.role || role || user.user_metadata?.role || 'student') as AppRole
+  // Chỉ tin vai trò từ bảng profiles (server). Không dùng user_metadata vì người dùng tự sửa được.
+  const effectiveRole: AppRole = profile?.role || role || 'student'
 
   if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
     return <Navigate to="/unauthorized" state={{ attemptedUrl: location.pathname, userRole: effectiveRole }} replace />

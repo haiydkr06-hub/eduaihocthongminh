@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { sharedStore, type SharedNotification } from '../../services/sharedStore'
+import { useNotifications } from '../../hooks/useNotifications'
 import type { NotificationItem } from '../../types/notification'
 
 // Định dạng thời gian tương đối
@@ -26,135 +25,13 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 export function NotificationBell() {
-  const { user, profile, role } = useAuth()
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [unreadCount, setUnreadCount] = useState<number>(0)
+  const { profile, role } = useAuth()
+  const { notifications, unreadCount, loading, markRead, markAllRead } = useNotifications()
   const [isOpen, setIsOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
-  const currentRole = (profile?.role || role || 'student') as 'student' | 'teacher' | 'admin'
-  const userId = user?.id
-
-  // Tải danh sách thông báo của user đang đăng nhập
-  const fetchNotifications = useCallback(async () => {
-    try {
-      // 1. Lấy thông báo từ sharedStore theo vai trò của người dùng
-      const sharedList = sharedStore.getSharedNotifications(currentRole, userId)
-      let combined: NotificationItem[] = sharedList.map((n) => ({
-        id: n.id,
-        user_id: n.user_id,
-        title: n.title,
-        message: n.message,
-        type: n.type,
-        is_read: n.is_read,
-        created_at: n.created_at,
-      }))
-
-      // 2. Nếu có Supabase, truy vấn thêm từ bảng notifications
-      if (isSupabaseConfigured && userId) {
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(20)
-
-        if (!error && data && data.length > 0) {
-          const sbNotices = data as NotificationItem[]
-          const existingIds = new Set(sbNotices.map((n) => n.id))
-          const nonDupes = combined.filter((n) => !existingIds.has(n.id))
-          combined = [...sbNotices, ...nonDupes]
-        }
-      }
-
-      setNotifications(combined)
-      const unread = combined.filter((n) => !n.is_read).length
-      setUnreadCount(unread)
-    } catch (err) {
-      console.warn('Lỗi khi fetch thông báo:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [userId, currentRole])
-
-  useEffect(() => {
-    let active = true
-    const load = async () => {
-      await Promise.resolve()
-      if (!active) return
-      await fetchNotifications()
-    }
-    void load()
-    return () => {
-      active = false
-    }
-  }, [fetchNotifications])
-
-  // Lắng nghe sự kiện thông báo mới từ hệ thống (khi Admin gửi thông báo)
-  useEffect(() => {
-    const handleNewNotification = (e: Event) => {
-      const customEvent = e as CustomEvent<SharedNotification>
-      const notice: SharedNotification = customEvent.detail
-      if (!notice) return
-
-      // Kiểm tra đối tượng nhận thông báo (all, students, teachers hoặc đích danh user_id)
-      const isTarget =
-        notice.target === 'all' ||
-        (currentRole === 'student' && notice.target === 'students') ||
-        (currentRole === 'teacher' && notice.target === 'teachers') ||
-        (userId && notice.user_id === userId)
-
-      if (isTarget) {
-        setNotifications((prev) => {
-          if (prev.some((n) => n.id === notice.id)) return prev
-          return [notice, ...prev]
-        })
-        if (!notice.is_read) {
-          setUnreadCount((prev) => prev + 1)
-        }
-      }
-    }
-
-    window.addEventListener('eduai:new_notification', handleNewNotification)
-    return () => {
-      window.removeEventListener('eduai:new_notification', handleNewNotification)
-    }
-  }, [currentRole, userId])
-
-  // Lắng nghe Supabase Realtime qua kênh 'custom-all-channel'
-  useEffect(() => {
-    if (!isSupabaseConfigured) return
-
-    const channel = supabase
-      .channel('custom-all-channel')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-        },
-        (payload) => {
-          const newNotice = payload.new as NotificationItem
-          if (!newNotice.user_id || newNotice.user_id === user?.id) {
-            setNotifications((prev) => {
-              if (prev.some((item) => item.id === newNotice.id)) return prev
-              return [newNotice, ...prev]
-            })
-            if (!newNotice.is_read) {
-              setUnreadCount((prev) => prev + 1)
-            }
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [user?.id])
+  const currentRole = profile?.role || role || 'student'
 
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
@@ -169,52 +46,14 @@ export function NotificationBell() {
     }
   }, [])
 
-  // Đánh dấu 1 thông báo đã đọc
-  const handleMarkAsRead = async (notice: NotificationItem) => {
-    if (notice.is_read) return
-
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notice.id ? { ...n, is_read: true } : n))
-    )
-    setUnreadCount((prev) => Math.max(0, prev - 1))
-
-    // Lưu vào sharedStore
-    sharedStore.markSharedNotificationRead(notice.id)
-
-    // Cập nhật lên Supabase nếu có
-    if (isSupabaseConfigured) {
-      try {
-        await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('id', notice.id)
-      } catch (err) {
-        console.warn('Lỗi cập nhật đã đọc:', err)
-      }
-    }
+  const handleMarkAsRead = (notice: NotificationItem) => {
+    void markRead(notice.id)
   }
 
-  // Đánh dấu tất cả thông báo đã đọc
-  const handleMarkAllAsRead = async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
-    setUnreadCount(0)
-
-    // Lưu vào sharedStore
-    sharedStore.markAllSharedNotificationsRead(currentRole)
-
-    // Cập nhật lên Supabase nếu có
-    if (isSupabaseConfigured && user?.id) {
-      try {
-        await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('user_id', user.id)
-          .eq('is_read', false)
-      } catch (err) {
-        console.warn('Lỗi đánh dấu tất cả đã đọc:', err)
-      }
-    }
+  const handleMarkAllAsRead = () => {
+    void markAllRead()
   }
+
 
   const getNoticeIcon = (type?: string) => {
     switch (type) {
@@ -231,7 +70,9 @@ export function NotificationBell() {
 
   const handleNavigateAll = () => {
     setIsOpen(false)
-    if (currentRole === 'teacher') {
+    if (currentRole === 'admin') {
+      navigate('/admin/notifications')
+    } else if (currentRole === 'teacher') {
       navigate('/teacher/notifications')
     } else {
       navigate('/student/notifications')

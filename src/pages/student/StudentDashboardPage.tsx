@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { studentService, type StudentCourseItem, type StudentDashboardStats } from '../../services/studentService'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
+import { CountUp } from '../../components/CountUp'
 import { useAuth } from '../../hooks/useAuth'
 
 type IconName =
@@ -58,21 +60,25 @@ export function StudentDashboardPage() {
   const [courses, setCourses] = useState<StudentCourseItem[]>([])
   const [stats, setStats] = useState<StudentDashboardStats | null>(null)
   const [filter, setFilter] = useState('Tất cả')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [hour] = useState(() => new Date().getHours())
 
   useEffect(() => {
+    if (!profile?.id) return
     let active = true
-    Promise.all([
-      studentService.getMyCourses(profile?.id),
-      studentService.getDashboardStats(profile?.id),
-    ])
+    Promise.all([studentService.getMyCourses(profile.id), studentService.getDashboardStats(profile.id)])
       .then(([coursesData, statsData]) => {
-        if (active) {
-          setCourses(coursesData)
-          setStats(statsData)
-        }
+        if (!active) return
+        setCourses(coursesData)
+        setStats(statsData)
+        setError(null)
       })
-      .catch(() => {
-        // an toàn khi có lỗi mạng
+      .catch((err) => {
+        if (active) setError(getFriendlyErrorMessage(err, 'Không thể tải dữ liệu học tập.'))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
       })
     return () => {
       active = false
@@ -80,6 +86,10 @@ export function StudentDashboardPage() {
   }, [profile?.id])
 
   const studentName = profile?.full_name || 'Học viên'
+  const greeting = hour < 11 ? 'Chào buổi sáng' : hour < 14 ? 'Chào buổi trưa' : hour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối'
+  const next = stats?.nextLesson ?? null
+  const continueUrl = next ? `/student/learning/${next.courseId}/${next.lessonId}` : '/student/courses'
+  const maxDayMinutes = Math.max(1, ...(stats?.weekly ?? []).map((d) => d.minutes))
 
   const visibleCourses = useMemo(() => {
     return courses.filter((course) => {
@@ -92,26 +102,30 @@ export function StudentDashboardPage() {
   return (
     <div className="page-content">
       {/* Welcome Row */}
-      <section className="welcome-row">
+      <section className="welcome-row hero-aurora">
         <div>
           <div className="date-label"><span className="date-dot" /> {todayLabel}</div>
-          <h1>Chào buổi sáng, {studentName} <span className="wave">✦</span></h1>
+          <h1>{greeting}, {studentName} <span className="wave">✦</span></h1>
           <p className="welcome-subtitle">Mỗi ngày một chút, bạn đang tiến gần hơn tới mục tiêu của mình.</p>
         </div>
-        <button className="primary-button" onClick={() => navigate('/student/learn/tc-1')}>
-          <Icon name="play" size={16} /> Tiếp tục học <Icon name="arrow" size={16} />
+        <button className="primary-button" onClick={() => navigate(continueUrl)}>
+          <Icon name="play" size={16} /> {next ? 'Tiếp tục học' : 'Khám phá khóa học'} <Icon name="arrow" size={16} />
         </button>
       </section>
+
+      {error && (
+        <div role="alert" className="mb-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
 
       {/* Stats Grid */}
       <section className="stats-grid" aria-label="Tổng quan tiến độ">
         <article className="stat-card">
           <div className="stat-top">
             <span className="stat-icon icon-violet"><Icon name="book" size={18} /></span>
-            <span className="stat-trend">+2 tuần này</span>
+            <span className="stat-trend">{stats ? `${stats.completedCoursesCount} đã hoàn thành` : ''}</span>
           </div>
           <div className="stat-value">
-            0{stats?.enrolledCoursesCount || 4} <span>khóa học</span>
+            <CountUp value={stats?.enrolledCoursesCount} /> <span>khóa học</span>
           </div>
           <div className="stat-caption">Khóa học đang tham gia</div>
           <div className="mini-bars"><i /><i /><i /><i /><i /><i /><i /></div>
@@ -120,10 +134,10 @@ export function StudentDashboardPage() {
         <article className="stat-card">
           <div className="stat-top">
             <span className="stat-icon icon-green"><Icon name="clock" size={18} /></span>
-            <span className="stat-trend">+18% tuần trước</span>
+            <span className="stat-trend">{stats ? `${stats.weekHours} giờ tuần này` : ''}</span>
           </div>
           <div className="stat-value">
-            {stats?.studyHours || 12.5} <span>giờ</span>
+            <CountUp value={stats?.studyHours} decimals={1} /> <span>giờ</span>
           </div>
           <div className="stat-caption">Thời gian học tập</div>
           <div className="mini-bars bars-green"><i /><i /><i /><i /><i /><i /><i /></div>
@@ -132,10 +146,12 @@ export function StudentDashboardPage() {
         <article className="stat-card">
           <div className="stat-top">
             <span className="stat-icon icon-orange"><Icon name="trophy" size={18} /></span>
-            <span className="stat-trend">Top 15%</span>
+            <span className="stat-trend">
+              {stats?.averageQuizScore != null ? `TB quiz ${stats.averageQuizScore}/100` : 'Chưa làm quiz'}
+            </span>
           </div>
           <div className="stat-value">
-            {stats?.points || 860} <span>điểm</span>
+            <CountUp value={stats?.points} /> <span>điểm</span>
           </div>
           <div className="stat-caption">Điểm tích lũy của bạn</div>
           <div className="mini-bars bars-orange"><i /><i /><i /><i /><i /><i /><i /></div>
@@ -144,13 +160,15 @@ export function StudentDashboardPage() {
         <article className="stat-card">
           <div className="stat-top">
             <span className="stat-icon icon-pink"><Icon name="target" size={18} /></span>
-            <span className="stat-trend">Mục tiêu 80%</span>
+            <span className="stat-trend">
+              {stats ? `${stats.lessonsThisWeek}/${stats.weeklyGoalLessons} bài` : ''}
+            </span>
           </div>
           <div className="stat-value">
-            {stats?.weeklyGoalPercent || 72}<span className="percent">%</span>
+            <CountUp value={stats?.weeklyGoalPercent} /><span className="percent">%</span>
           </div>
           <div className="stat-caption">Tiến độ mục tiêu tuần</div>
-          <div className="stat-progress"><span /></div>
+          <div className="stat-progress"><span style={{ width: `${stats?.weeklyGoalPercent ?? 0}%` }} /></div>
         </article>
       </section>
 
@@ -214,12 +232,20 @@ export function StudentDashboardPage() {
                 <button
                   className="course-action"
                   aria-label={`Mở khóa học ${course.title}`}
-                  onClick={() => navigate(`/student/learn/${course.id}`)}
+                  onClick={() => navigate(`/student/learning/${course.id}`)}
                 >
                   {course.status === 'Hoàn thành' ? <Icon name="check" size={18} /> : <Icon name="play" size={16} />}
                 </button>
               </article>
-            )) : <div className="empty-state">Không tìm thấy khóa học phù hợp.</div>}
+            )) : (
+              <div className="empty-state">
+                {loading
+                  ? 'Đang tải khóa học…'
+                  : courses.length === 0
+                  ? 'Bạn chưa đăng ký khóa học nào — hãy vào mục Khóa học để khám phá.'
+                  : 'Không tìm thấy khóa học phù hợp.'}
+              </div>
+            )}
           </div>
         </section>
 
@@ -229,54 +255,61 @@ export function StudentDashboardPage() {
             <div className="section-heading compact">
               <div>
                 <h2>Tiến độ tuần này</h2>
-                <p>Bạn đang làm rất tốt!</p>
+                <p>{stats && stats.lessonsThisWeek >= stats.weeklyGoalLessons ? 'Bạn đã đạt mục tiêu tuần!' : 'Thời gian học 7 ngày gần nhất'}</p>
               </div>
               <button className="more-button" aria-label="Xem thêm tiến độ" onClick={() => navigate('/student/achievements')}>
                 ···
               </button>
             </div>
             <div className="weekly-total">
-              <strong>12.5</strong><span>giờ học</span>
-              <span className="weekly-change">↗ 18%</span>
+              <strong><CountUp value={stats?.weekHours} decimals={1} /></strong><span>giờ học</span>
             </div>
-            <div className="chart" aria-label="Biểu đồ giờ học trong tuần">
-              {[
-                { d: 'T2', h: 42 },
-                { d: 'T3', h: 69 },
-                { d: 'T4', h: 52 },
-                { d: 'T5', h: 87 },
-                { d: 'T6', h: 58 },
-                { d: 'T7', h: 100 },
-                { d: 'CN', h: 36 },
-              ].map((day, index) => (
-                <div className="chart-column" key={day.d}>
+            <div className="chart" aria-label="Biểu đồ số phút học trong 7 ngày gần nhất">
+              {(stats?.weekly ?? []).map((day, index) => (
+                <div className="chart-column" key={`${day.label}-${index}`} title={`${day.label}: ${day.minutes} phút`}>
                   <div className="chart-bar-bg">
-                    <span style={{ height: `${day.h}%` }} className={index === 5 ? 'today-bar' : ''} />
+                    <span
+                      style={{ height: `${Math.round((day.minutes / maxDayMinutes) * 100)}%` }}
+                      className={day.isToday ? 'today-bar' : ''}
+                    />
                   </div>
-                  <small>{day.d}</small>
+                  <small>{day.label}</small>
                 </div>
               ))}
             </div>
             <div className="weekly-foot">
               <span><i /> Mục tiêu tuần</span>
-              <strong>12.5 / 15 giờ</strong>
+              <strong>{stats ? `${stats.lessonsThisWeek} / ${stats.weeklyGoalLessons} bài học` : '…'}</strong>
             </div>
           </section>
 
           <section className="next-lesson">
             <div className="lesson-topline">
-              <span className="lesson-tag">BUỔI HỌC TIẾP THEO</span>
-              <span className="lesson-live"><i /> HÔM NAY</span>
+              <span className="lesson-tag">BÀI HỌC TIẾP THEO</span>
+              {next && <span className="lesson-live"><i /> SẴN SÀNG</span>}
             </div>
-            <h3>Hàm số bậc hai</h3>
-            <p>Toán học tư duy <span>·</span> Bài 13</p>
-            <div className="lesson-info">
-              <span><Icon name="clock" size={15} /> 15:30 – 16:15</span>
-              <span className="lesson-teacher"><span className="teacher-avatar">N</span> Cô Minh Anh</span>
-            </div>
-            <button onClick={() => navigate('/student/learn/tc-1')}>
-              Vào lớp học <Icon name="arrow" size={15} />
-            </button>
+            {next ? (
+              <>
+                <h3>{next.lessonTitle}</h3>
+                <p>{next.courseTitle} <span>·</span> Bài {next.position}</p>
+                <div className="lesson-info">
+                  <span className="lesson-teacher">
+                    <span className="teacher-avatar">{next.instructor.charAt(0)}</span> {next.instructor}
+                  </span>
+                </div>
+                <button onClick={() => navigate(continueUrl)}>
+                  Vào học <Icon name="arrow" size={15} />
+                </button>
+              </>
+            ) : (
+              <>
+                <h3>{loading ? 'Đang tải…' : 'Bạn đã học hết các bài hiện có'}</h3>
+                <p>Đăng ký thêm khóa học mới để tiếp tục hành trình.</p>
+                <button onClick={() => navigate('/student/courses')}>
+                  Khám phá khóa học <Icon name="arrow" size={15} />
+                </button>
+              </>
+            )}
             <span className="lesson-decoration">f(x)</span>
           </section>
 
@@ -286,7 +319,7 @@ export function StudentDashboardPage() {
               <strong>Trợ lý học tập AI</strong>
               <p>Sẵn sàng giải đáp mọi thắc mắc của bạn.</p>
             </div>
-            <button aria-label="Mở trợ lý AI" onClick={() => navigate('/student/learn/tc-1')}>
+            <button aria-label="Mở trợ lý AI" onClick={() => navigate('/student/ai-assistant')}>
               <Icon name="arrow" size={17} />
             </button>
           </section>

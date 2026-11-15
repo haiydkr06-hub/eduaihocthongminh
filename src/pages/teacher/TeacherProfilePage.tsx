@@ -8,26 +8,35 @@ import {
   Check,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { readPrefs, writePrefs } from '../../lib/localPrefs'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 
 export function TeacherProfilePage() {
-  const { profile } = useAuth()
-  const [fullName, setFullName] = useState(profile?.full_name || 'Cô Nguyễn Minh Anh')
-  const [phone, setPhone] = useState(profile?.phone || '0912 345 678')
-  const [specialty, setSpecialty] = useState('Toán học tư duy & Hình học không gian')
-  const [bio, setBio] = useState(
-    'Hơn 8 năm kinh nghiệm giảng dạy môn Toán tại các trường chuyên. Yêu thích áp dụng công nghệ và phương pháp tư duy trực quan vào bài giảng.'
-  )
+  const { profile, updateProfile } = useAuth()
+  const prefsKey = `eduai_profile_extra:${profile?.id}`
+  const [initialExtra] = useState(() => readPrefs(prefsKey, { specialty: '', bio: '' }))
+  const [fullName, setFullName] = useState(profile?.full_name || '')
+  const [phone, setPhone] = useState(profile?.phone || '')
+  const [specialty, setSpecialty] = useState(initialExtra.specialty)
+  const [bio, setBio] = useState(initialExtra.bio)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSave = (e: FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSaving(true)
-    setTimeout(() => {
-      setSaving(false)
-      setNotice('Đã cập nhật hồ sơ giảng viên thành công!')
-      setTimeout(() => setNotice(null), 3000)
-    }, 500)
+    setError(null)
+    const { error: updErr } = await updateProfile({ full_name: fullName, phone })
+    setSaving(false)
+    if (updErr) {
+      setError(getFriendlyErrorMessage(updErr, 'Không lưu được hồ sơ.'))
+      return
+    }
+    writePrefs(prefsKey, { specialty: specialty.trim(), bio: bio.trim() })
+    setNotice('Đã cập nhật hồ sơ giảng viên thành công!')
+    setTimeout(() => setNotice(null), 3000)
   }
 
   return (
@@ -39,6 +48,9 @@ export function TeacherProfilePage() {
         </p>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />

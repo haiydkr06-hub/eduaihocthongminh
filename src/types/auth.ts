@@ -21,9 +21,10 @@ export interface AuthContextType {
   loading: boolean
   error: string | null
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
-  signUp: (email: string, password: string, fullName: string, role?: AppRole) => Promise<{ error: Error | null; user: User | null }>
+  signUp: (email: string, password: string, fullName: string, role?: AppRole, phone?: string) => Promise<{ error: Error | null; user: User | null }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: Error | null }>
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>
   refreshProfile: () => Promise<void>
+  updateProfile: (fields: { full_name?: string; phone?: string | null }) => Promise<{ error: Error | null }>
 }

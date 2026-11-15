@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Search,
   Shield,
@@ -7,10 +7,13 @@ import {
   Check,
   UserCheck,
 } from 'lucide-react'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
+import { useAuth } from '../../hooks/useAuth'
 import { adminService } from '../../services/adminService'
 import type { AppRole, Profile } from '../../types/auth'
 
 export function AdminUsersPage() {
+  const { profile } = useAuth()
   const [users, setUsers] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [roleFilter, setRoleFilter] = useState('all')
@@ -18,45 +21,44 @@ export function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null)
   const [updatingRole, setUpdatingRole] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-
-  const refreshUsers = useCallback(async () => {
-    const data = await adminService.getUsers(roleFilter, searchQuery)
-    setUsers(data)
-  }, [roleFilter, searchQuery])
+  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let active = true
-    adminService.getUsers(roleFilter, searchQuery)
-      .then((data) => {
-        if (active) {
+    // Chờ người dùng gõ xong (debounce) để không gửi truy vấn ở mỗi phím
+    const timer = setTimeout(() => {
+      adminService
+        .getUsers(roleFilter, searchQuery)
+        .then((data) => {
+          if (!active) return
           setUsers(data)
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
-      })
+          setError(null)
+        })
+        .catch((err) => active && setError(getFriendlyErrorMessage(err, 'Không thể tải danh sách người dùng.')))
+        .finally(() => active && setLoading(false))
+    }, 250)
     return () => {
       active = false
+      clearTimeout(timer)
     }
-  }, [roleFilter, searchQuery])
+  }, [roleFilter, searchQuery, reloadKey])
+
+  const roleLabel: Record<AppRole, string> = { admin: 'Quản trị viên', teacher: 'Giảng viên', student: 'Học viên' }
 
   const handleRoleChange = async (newRole: AppRole) => {
-    if (!selectedUser || updatingRole) return
+    if (!selectedUser || updatingRole || !profile?.id) return
+    if (!window.confirm(`Đổi vai trò của "${selectedUser.full_name}" sang "${roleLabel[newRole]}"?`)) return
     setUpdatingRole(true)
+    setError(null)
     try {
-      const result = await adminService.updateUserRole(selectedUser.id, newRole)
-
-      if (result.success) {
-        setNotice(`Đã chuyển vai trò của "${selectedUser.full_name}" sang "${newRole}" thành công!`)
-        setSelectedUser(null)
-        refreshUsers()
-        setTimeout(() => setNotice(null), 3000)
-      } else {
-        alert(`Không thể cập nhật: ${result.error}`)
-      }
+      await adminService.updateUserRole(selectedUser.id, newRole, profile.id)
+      setNotice(`Đã chuyển vai trò của "${selectedUser.full_name}" sang "${roleLabel[newRole]}" thành công!`)
+      setSelectedUser(null)
+      setReloadKey((k) => k + 1)
+      setTimeout(() => setNotice(null), 3000)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không thể cập nhật vai trò.'))
     } finally {
       setUpdatingRole(false)
     }
@@ -97,6 +99,9 @@ export function AdminUsersPage() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />

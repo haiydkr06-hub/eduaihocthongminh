@@ -1,119 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
-import { supabase, isSupabaseConfigured } from '../../lib/supabase'
-import { useAuth } from '../../hooks/useAuth'
-import { sharedStore, type SharedNotification } from '../../services/sharedStore'
-import type { NotificationItem } from '../../types/notification'
+import { useState } from 'react'
+import { useNotifications } from '../../hooks/useNotifications'
 
 export function TeacherNotificationsPage() {
-  const { user } = useAuth()
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const { notifications, loading, error, markRead, markAllRead } = useNotifications()
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
-  const [loading, setLoading] = useState(true)
 
-  const userId = user?.id
-
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const shared = sharedStore.getSharedNotifications('teacher', userId)
-      let combined: NotificationItem[] = shared.map((n) => ({
-        id: n.id,
-        user_id: n.user_id,
-        title: n.title,
-        message: n.message,
-        type: n.type,
-        is_read: n.is_read,
-        created_at: n.created_at,
-      }))
-
-      if (isSupabaseConfigured && userId) {
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-
-        if (!error && data && data.length > 0) {
-          const sbNotices = data as NotificationItem[]
-          const existingIds = new Set(sbNotices.map((n) => n.id))
-          const nonDupes = combined.filter((n) => !existingIds.has(n.id))
-          combined = [...sbNotices, ...nonDupes]
-        }
-      }
-
-      setNotifications(combined)
-    } catch (err) {
-      console.warn('Lỗi tải thông báo giảng viên:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [userId])
-
-  useEffect(() => {
-    let active = true
-    const load = async () => {
-      await Promise.resolve()
-      if (!active) return
-      await fetchNotifications()
-    }
-    void load()
-    return () => {
-      active = false
-    }
-  }, [fetchNotifications])
-
-  useEffect(() => {
-    const handleNew = (e: Event) => {
-      const customEvent = e as CustomEvent<SharedNotification>
-      const notice: SharedNotification = customEvent.detail
-      if (!notice) return
-      if (notice.target === 'all' || notice.target === 'teachers' || (userId && notice.user_id === userId)) {
-        setNotifications((prev) => {
-          if (prev.some((n) => n.id === notice.id)) return prev
-          return [notice, ...prev]
-        })
-      }
-    }
-
-    window.addEventListener('eduai:new_notification', handleNew)
-    return () => {
-      window.removeEventListener('eduai:new_notification', handleNew)
-    }
-  }, [userId])
-
-  const handleMarkAsRead = async (noticeId: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === noticeId ? { ...n, is_read: true } : n))
-    )
-
-    sharedStore.markSharedNotificationRead(noticeId)
-
-    if (isSupabaseConfigured) {
-      try {
-        await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('id', noticeId)
-      } catch (err) {
-        console.warn('Lỗi cập nhật đã đọc:', err)
-      }
-    }
+  const handleMarkAsRead = (noticeId: string) => {
+    void markRead(noticeId)
   }
 
-  const handleMarkAllAsRead = async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
-    sharedStore.markAllSharedNotificationsRead('teacher')
-
-    if (isSupabaseConfigured && user?.id) {
-      try {
-        await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('user_id', user.id)
-          .eq('is_read', false)
-      } catch (err) {
-        console.warn('Lỗi đánh dấu tất cả đã đọc:', err)
-      }
-    }
+  const handleMarkAllAsRead = () => {
+    void markAllRead()
   }
 
   const filteredList =
@@ -170,6 +67,9 @@ export function TeacherNotificationsPage() {
       </div>
 
       <div className="bg-white rounded-2xl border border-[#eceef4] shadow-sm divide-y divide-gray-100 overflow-hidden">
+        {error && (
+          <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+        )}
         {loading && notifications.length === 0 ? (
           <div className="p-12 text-center text-sm text-gray-400">Đang tải danh sách thông báo...</div>
         ) : filteredList.length > 0 ? (

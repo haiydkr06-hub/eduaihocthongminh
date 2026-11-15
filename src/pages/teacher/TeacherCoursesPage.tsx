@@ -13,12 +13,15 @@ import {
 } from 'lucide-react'
 import { teacherService, type TeacherCourse, type TeacherLesson } from '../../services/teacherService'
 import { useAuth } from '../../hooks/useAuth'
+import { useTeacherScope } from '../../hooks/useTeacherScope'
+import { getFriendlyErrorMessage } from '../../lib/errorMessage'
 
 export function TeacherCoursesPage() {
   const { profile } = useAuth()
   const [courses, setCourses] = useState<TeacherCourse[]>([])
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Create course modal
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -38,62 +41,53 @@ export function TeacherCoursesPage() {
   const [lessonVideo, setLessonVideo] = useState('')
   const [lessonDuration, setLessonDuration] = useState(20)
 
-  const teacherId = profile?.id
+  const scope = useTeacherScope()
 
   const loadCourses = useCallback(async () => {
+    if (scope === undefined) return
     try {
-      const data = await teacherService.getCourses(teacherId)
-      setCourses(data)
+      setCourses(await teacherService.getCourses(scope))
+      setError(null)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không thể tải danh sách khóa học.'))
     } finally {
       setLoading(false)
     }
-  }, [teacherId])
+  }, [scope])
 
   useEffect(() => {
-    let active = true
-    teacherService.getCourses(teacherId)
-      .then((data) => {
-        if (active) {
-          setCourses(data)
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setLoading(false)
-        }
-      })
-
+    void Promise.resolve().then(loadCourses)
     const handleUpdate = () => {
       void loadCourses()
     }
     window.addEventListener('eduai:courses_updated', handleUpdate)
-
     return () => {
-      active = false
       window.removeEventListener('eduai:courses_updated', handleUpdate)
     }
-  }, [teacherId, loadCourses])
+  }, [loadCourses])
 
   const handleCreateCourse = async (e: FormEvent) => {
     e.preventDefault()
-    if (!newTitle.trim()) return
+    if (!newTitle.trim() || !profile?.id || creating) return
 
     setCreating(true)
-    const created = await teacherService.createCourse(profile?.id || 'temp', {
-      title: newTitle.trim(),
-      category: newCategory,
-      description: newDescription.trim(),
-    })
-    setCreating(false)
-
-    if (created) {
-      setNotice(`Đã tạo khóa học "${newTitle}" thành công! Khóa học đã được gửi tới Quản trị viên để duyệt xuất bản.`)
+    setError(null)
+    try {
+      await teacherService.createCourse(profile.id, {
+        title: newTitle.trim(),
+        category: newCategory,
+        description: newDescription.trim(),
+      })
+      setNotice(`Đã tạo khóa học "${newTitle.trim()}" thành công! Khóa học đã được gửi tới Quản trị viên để duyệt xuất bản.`)
       setShowCreateModal(false)
       setNewTitle('')
       setNewDescription('')
-      loadCourses()
+      void loadCourses()
       setTimeout(() => setNotice(null), 3000)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không tạo được khóa học. Vui lòng thử lại.'))
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -101,9 +95,14 @@ export function TeacherCoursesPage() {
     setSelectedCourse(course)
     setLoadingLessons(true)
     setShowAddLesson(false)
-    const data = await teacherService.getLessons(course.id)
-    setLessons(data)
-    setLoadingLessons(false)
+    setLessons([])
+    try {
+      setLessons(await teacherService.getLessons(course.id))
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không tải được danh sách bài học.'))
+    } finally {
+      setLoadingLessons(false)
+    }
   }
 
   const handleAddLesson = async (e: FormEvent) => {
@@ -111,6 +110,7 @@ export function TeacherCoursesPage() {
     if (!selectedCourse || !lessonTitle.trim() || savingLesson) return
 
     setSavingLesson(true)
+    setError(null)
     try {
       const newLesson = await teacherService.addLesson({
         course_id: selectedCourse.id,
@@ -118,16 +118,17 @@ export function TeacherCoursesPage() {
         content: lessonContent.trim(),
         video_url: lessonVideo.trim() || undefined,
         duration_minutes: lessonDuration,
-        position: lessons.length + 1,
       })
 
-      setLessons([...lessons, newLesson])
+      setLessons((prev) => [...prev, newLesson])
       setShowAddLesson(false)
       setLessonTitle('')
       setLessonContent('')
       setLessonVideo('')
       setNotice(`Đã thêm bài giảng "${newLesson.title}" vào khóa học!`)
       setTimeout(() => setNotice(null), 3000)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Không lưu được bài học. Vui lòng thử lại.'))
     } finally {
       setSavingLesson(false)
     }
@@ -151,6 +152,9 @@ export function TeacherCoursesPage() {
         </button>
       </div>
 
+      {error && (
+        <div role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
+      )}
       {notice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
           <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />

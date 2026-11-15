@@ -1,14 +1,41 @@
 import { supabase, isSupabaseConfigured, withTimeout } from '../lib/supabase'
-import { sharedStore } from './sharedStore'
 import type { AppRole, Profile } from '../types/auth'
+import { listDemoAccounts } from '../lib/demoAccounts'
+import { demoDb } from './demoDb'
+import { notificationService, type NotificationTarget } from './notificationService'
+import { ServiceError } from './studentService'
+
+/* ============================== KIỂU DỮ LIỆU ============================== */
+
+export interface PendingCourseItem {
+  id: string
+  title: string
+  category: string
+  instructor_name: string
+  lessons_count: number
+  created_at: string
+}
+
+export interface ActivityItem {
+  id: string
+  kind: 'attempt' | 'enrollment' | 'course'
+  text: string
+  at: string
+}
 
 export interface AdminStats {
   totalStudents: number
   totalTeachers: number
   totalCourses: number
+  publishedCourses: number
   totalQuizzes: number
   totalAttempts: number
-  averageCompletionRate: number
+  /** % lượt làm quiz đạt yêu cầu (null nếu chưa có lượt nào) */
+  passRate: number | null
+  /** Số học viên đăng ký mới trong 30 ngày gần đây */
+  newStudents30d: number
+  pendingCourses: PendingCourseItem[]
+  recentActivity: ActivityItem[]
 }
 
 export interface AdminCourseItem {
@@ -18,7 +45,7 @@ export interface AdminCourseItem {
   instructor_name: string
   lessons_count: number
   students_count: number
-  status: 'draft' | 'published' | 'archived' | 'pending'
+  status: 'draft' | 'published' | 'archived'
   created_at: string
 }
 
@@ -31,7 +58,7 @@ export interface AdminQuizItem {
   pass_score: number
   status: 'draft' | 'published' | 'archived'
   attempts_count: number
-  avg_score: number
+  avg_score: number | null
 }
 
 export interface SystemNotificationItem {
@@ -40,526 +67,325 @@ export interface SystemNotificationItem {
   message: string
   type: string
   created_at: string
-  target: 'all' | 'students' | 'teachers'
+  target: NotificationTarget | 'user'
 }
 
-const defaultAdminStats: AdminStats = {
-  totalStudents: 142,
-  totalTeachers: 18,
-  totalCourses: 24,
-  totalQuizzes: 38,
-  totalAttempts: 520,
-  averageCompletionRate: 78,
+export interface SubjectReportRow {
+  category: string
+  courses: number
+  students: number
+  attempts: number
+  avgScore: number | null
+  passRate: number | null
 }
 
-const demoProfiles: Profile[] = [
-  { id: '1', email: 'admin@eduai.vn', full_name: 'Quản Trị Viên Hệ Thống', role: 'admin', created_at: '2026-01-10' },
-  { id: '2', email: 'minhanh.gv@eduai.vn', full_name: 'Cô Nguyễn Minh Anh', role: 'teacher', created_at: '2026-02-14' },
-  { id: '3', email: 'nam.tran@eduai.vn', full_name: 'Thầy Trần Hoàng Nam', role: 'teacher', created_at: '2026-02-20' },
-  { id: '4', email: 'ha.le@eduai.vn', full_name: 'Cô Lê Thu Hà', role: 'teacher', created_at: '2026-03-01' },
-  { id: '5', email: 'hocvien1@eduai.vn', full_name: 'Nguyễn Văn Minh Anh', role: 'student', created_at: '2026-03-12' },
-  { id: '6', email: 'hocvien2@eduai.vn', full_name: 'Trần Bảo Ngọc', role: 'student', created_at: '2026-03-15' },
-  { id: '7', email: 'hocvien3@eduai.vn', full_name: 'Lê Hoàng Long', role: 'student', created_at: '2026-03-20' },
-  { id: '8', email: 'hocvien4@eduai.vn', full_name: 'Phạm Quỳnh Trang', role: 'student', created_at: '2026-03-25' },
-]
+export interface AdminReport {
+  subjects: SubjectReportRow[]
+  /** Phân bố điểm: [0-49], [50-69], [70-84], [85-100] */
+  gradeDistribution: { label: string; count: number; percent: number }[]
+  totalAttempts: number
+  overallAvgScore: number | null
+  overallPassRate: number | null
+  /** % lượt ghi danh đã hoàn thành toàn bộ bài học */
+  courseCompletionRate: number | null
+}
 
-export const fallbackCoursesList: AdminCourseItem[] = [
-  {
-    id: 'c-1',
-    title: 'Toán học tư duy bậc THPT',
-    category: 'Toán học',
-    instructor_name: 'Cô Nguyễn Minh Anh',
-    lessons_count: 18,
-    students_count: 85,
-    status: 'published',
-    created_at: '2026-02-15',
-  },
-  {
-    id: 'c-2',
-    title: 'Khám phá thế giới khoa học & tự nhiên',
-    category: 'Khoa học',
-    instructor_name: 'Thầy Trần Hoàng Nam',
-    lessons_count: 20,
-    students_count: 64,
-    status: 'published',
-    created_at: '2026-02-22',
-  },
-  {
-    id: 'c-3',
-    title: 'Tiếng Anh giao tiếp & ngữ pháp thông minh',
-    category: 'Ngoại ngữ',
-    instructor_name: 'Cô Lê Thu Hà',
-    lessons_count: 16,
-    students_count: 120,
-    status: 'published',
-    created_at: '2026-03-05',
-  },
-  {
-    id: 'c-4',
-    title: 'Lập trình tư duy logic với AI',
-    category: 'Công nghệ',
-    instructor_name: 'Thầy Trần Thanh Bình',
-    lessons_count: 12,
-    students_count: 42,
-    status: 'draft',
-    created_at: '2026-04-01',
-  },
-]
+/* ============================== DỮ LIỆU THÔ ============================== */
 
-const fallbackQuizzesList: AdminQuizItem[] = [
-  {
-    id: 'q-1',
-    title: 'Kiểm tra 15 phút: Hàm số và Đồ thị',
-    course_title: 'Toán học tư duy bậc THPT',
-    questions_count: 10,
-    time_limit_minutes: 15,
-    pass_score: 60,
-    status: 'published',
-    attempts_count: 76,
-    avg_score: 82.5,
-  },
-  {
-    id: 'q-2',
-    title: 'Quiz trắc nghiệm: Động lực học chất điểm',
-    course_title: 'Khám phá thế giới khoa học & tự nhiên',
-    questions_count: 15,
-    time_limit_minutes: 20,
-    pass_score: 50,
-    status: 'published',
-    attempts_count: 52,
-    avg_score: 74.0,
-  },
-  {
-    id: 'q-3',
-    title: 'Kiểm tra giữa kỳ: Tenses & Modal Verbs',
-    course_title: 'Tiếng Anh giao tiếp & ngữ pháp thông minh',
-    questions_count: 20,
-    time_limit_minutes: 30,
-    pass_score: 70,
-    status: 'published',
-    attempts_count: 98,
-    avg_score: 88.2,
-  },
-  {
-    id: 'q-4',
-    title: 'Kiểm tra đầu vào: Thuật toán và Logic',
-    course_title: 'Lập trình tư duy logic với AI',
-    questions_count: 12,
-    time_limit_minutes: 25,
-    pass_score: 60,
-    status: 'draft',
-    attempts_count: 0,
-    avg_score: 0,
-  },
-]
+interface RawAdminData {
+  profiles: { id: string; full_name: string; email: string; role: AppRole; created_at: string }[]
+  courses: { id: string; teacher_id: string; title: string; category: string; status: AdminCourseItem['status']; created_at: string }[]
+  lessons: { id: string; course_id: string }[]
+  enrollments: { student_id: string; course_id: string; enrolled_at: string; status: string }[]
+  quizzes: { id: string; course_id: string; title: string; time_limit_minutes: number; pass_score: number; status: AdminQuizItem['status']; questions_count: number }[]
+  attempts: { id: string; quiz_id: string; student_id: string; score: number; is_passed: boolean; submitted_at: string }[]
+}
 
-export const fallbackNotificationsList: SystemNotificationItem[] = [
-  {
-    id: 'n-1',
-    title: 'Bảo trì hệ thống định kỳ',
-    message: 'Hệ thống EduAI sẽ tiến hành nâng cấp máy chủ lúc 00:00 Chủ nhật tuần này.',
-    type: 'warning',
-    created_at: '2026-11-14T10:00:00Z',
-    target: 'all',
-  },
-  {
-    id: 'n-2',
-    title: 'Chào mừng giảng viên mới tham gia giảng dạy',
-    message: 'Đã hoàn tất kiểm duyệt hồ sơ cho 3 giảng viên mới gia nhập nền tảng.',
-    type: 'success',
-    created_at: '2026-11-12T08:30:00Z',
-    target: 'teachers',
-  },
-  {
-    id: 'n-3',
-    title: 'Ra mắt tính năng Trợ lý AI học tập 2.0',
-    message: 'Các học viên hiện có thể hỏi đáp trực tiếp với trợ lý thông minh ngay trong phòng học.',
-    type: 'info',
-    created_at: '2026-11-10T14:15:00Z',
-    target: 'students',
-  },
-]
+function demoAdminRaw(): RawAdminData {
+  const t = demoDb.read()
+  // Gộp tài khoản đăng ký ở chế độ demo vào danh sách người dùng
+  const extra = listDemoAccounts().filter((a) => !t.profiles.some((p) => p.id === a.id))
+  return {
+    profiles: [
+      ...t.profiles,
+      ...extra.map((a) => ({ id: a.id, full_name: a.full_name, email: a.email, role: a.role, created_at: new Date().toISOString() })),
+    ],
+    courses: t.courses,
+    lessons: t.lessons,
+    enrollments: t.enrollments,
+    quizzes: t.quizzes.map((q) => ({ ...q, questions_count: q.questions.length })),
+    attempts: t.attempts,
+  }
+}
+
+async function supabaseAdminRaw(): Promise<RawAdminData> {
+  const [p, c, l, e, q, a] = await Promise.all([
+    withTimeout(supabase.from('profiles').select('id, full_name, email, role, created_at')),
+    withTimeout(supabase.from('courses').select('id, teacher_id, title, category, status, created_at').order('created_at', { ascending: false })),
+    withTimeout(supabase.from('lessons').select('id, course_id')),
+    withTimeout(supabase.from('enrollments').select('student_id, course_id, enrolled_at, status')),
+    withTimeout(supabase.from('quizzes').select('id, course_id, title, time_limit_minutes, pass_score, status, quiz_questions (count)')),
+    withTimeout(supabase.from('quiz_attempts').select('id, quiz_id, student_id, score, is_passed, submitted_at').order('submitted_at', { ascending: false }).limit(2000)),
+  ])
+  for (const res of [p, c, l, e, q, a]) if (res.error) throw res.error
+  interface QuizRow { id: string; course_id: string; title: string; time_limit_minutes: number | null; pass_score: number | null; status: AdminQuizItem['status']; quiz_questions: { count: number }[] | null }
+  return {
+    profiles: (p.data || []) as RawAdminData['profiles'],
+    courses: (c.data || []) as RawAdminData['courses'],
+    lessons: (l.data || []) as RawAdminData['lessons'],
+    enrollments: (e.data || []) as RawAdminData['enrollments'],
+    quizzes: ((q.data || []) as unknown as QuizRow[]).map((x) => ({
+      id: x.id,
+      course_id: x.course_id,
+      title: x.title,
+      time_limit_minutes: x.time_limit_minutes ?? 15,
+      pass_score: Number(x.pass_score ?? 50),
+      status: x.status,
+      questions_count: x.quiz_questions?.[0]?.count ?? 0,
+    })),
+    attempts: ((a.data || []) as RawAdminData['attempts']).map((x) => ({ ...x, score: Number(x.score) })),
+  }
+}
+
+const loadAdminRaw = () => (isSupabaseConfigured ? supabaseAdminRaw() : Promise.resolve(demoAdminRaw()))
+
+const avg = (values: number[]) => (values.length ? Math.round(values.reduce((s, v) => s + v, 0) / values.length) : null)
+const pct = (part: number, total: number) => (total ? Math.round((part / total) * 100) : null)
+
+/* ============================== SERVICE ============================== */
 
 export const adminService = {
   async getStats(): Promise<AdminStats> {
-    if (!isSupabaseConfigured) {
-      return defaultAdminStats
-    }
+    const raw = await loadAdminRaw()
+    const name = (id: string) => raw.profiles.find((p) => p.id === id)?.full_name || 'Người dùng'
+    const courseTitle = (id: string) => raw.courses.find((c) => c.id === id)?.title || 'khóa học'
+    const since30 = new Date(Date.now() - 30 * 24 * 3600_000).toISOString()
 
-    try {
-      const [profilesRes, coursesRes, quizzesRes, attemptsRes] = await withTimeout(
-        Promise.all([
-          supabase.from('profiles').select('role'),
-          supabase.from('courses').select('id, status'),
-          supabase.from('quizzes').select('id'),
-          supabase.from('quiz_attempts').select('id, score, is_passed'),
-        ]),
-        2500
-      )
+    const activity: ActivityItem[] = [
+      ...raw.attempts.map((a) => {
+        const quiz = raw.quizzes.find((q) => q.id === a.quiz_id)
+        return {
+          id: `a-${a.id}`,
+          kind: 'attempt' as const,
+          text: `${name(a.student_id)} nộp bài "${quiz?.title || 'quiz'}" đạt ${Math.round(a.score)}/100 điểm${a.is_passed ? '' : ' (chưa đạt)'}.`,
+          at: a.submitted_at,
+        }
+      }),
+      ...raw.enrollments.map((e) => ({
+        id: `e-${e.student_id}-${e.course_id}`,
+        kind: 'enrollment' as const,
+        text: `${name(e.student_id)} đăng ký khóa "${courseTitle(e.course_id)}".`,
+        at: e.enrolled_at,
+      })),
+      ...raw.courses.map((c) => ({
+        id: `c-${c.id}`,
+        kind: 'course' as const,
+        text: `${name(c.teacher_id)} tạo khóa học "${c.title}".`,
+        at: c.created_at,
+      })),
+    ]
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, 6)
 
-      const profiles = (profilesRes.data || []) as { role?: string }[]
-      const courses = coursesRes.data || []
-      const quizzes = quizzesRes.data || []
-      const attempts = (attemptsRes.data || []) as { score?: number }[]
-
-      const totalStudents = profiles.filter((p) => p.role === 'student').length || 142
-      const totalTeachers = profiles.filter((p) => p.role === 'teacher').length || 18
-      const totalCourses = courses.length || 24
-      const totalQuizzes = quizzes.length || 38
-      const totalAttempts = attempts.length || 520
-
-      const avgScore = attempts.length
-        ? Math.round(attempts.reduce((acc, cur) => acc + (cur.score || 0), 0) / attempts.length)
-        : 78
-
-      return {
-        totalStudents,
-        totalTeachers,
-        totalCourses,
-        totalQuizzes,
-        totalAttempts,
-        averageCompletionRate: avgScore,
-      }
-    } catch {
-      return defaultAdminStats
+    return {
+      totalStudents: raw.profiles.filter((p) => p.role === 'student').length,
+      totalTeachers: raw.profiles.filter((p) => p.role === 'teacher').length,
+      totalCourses: raw.courses.length,
+      publishedCourses: raw.courses.filter((c) => c.status === 'published').length,
+      totalQuizzes: raw.quizzes.length,
+      totalAttempts: raw.attempts.length,
+      passRate: pct(raw.attempts.filter((a) => a.is_passed).length, raw.attempts.length),
+      newStudents30d: raw.profiles.filter((p) => p.role === 'student' && p.created_at >= since30).length,
+      pendingCourses: raw.courses
+        .filter((c) => c.status === 'draft')
+        .map((c) => ({
+          id: c.id,
+          title: c.title,
+          category: c.category,
+          instructor_name: name(c.teacher_id),
+          lessons_count: raw.lessons.filter((l) => l.course_id === c.id).length,
+          created_at: c.created_at,
+        })),
+      recentActivity: activity,
     }
   },
 
   async getUsers(roleFilter?: string, searchQuery?: string): Promise<Profile[]> {
+    const q = (searchQuery || '').trim().toLowerCase()
+    const matches = (u: { role: string; full_name: string; email: string }) =>
+      (!roleFilter || roleFilter === 'all' || u.role === roleFilter) &&
+      (!q || u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+
     if (!isSupabaseConfigured) {
-      return demoProfiles.filter((u) => {
-        const matchRole = !roleFilter || roleFilter === 'all' || u.role === roleFilter
-        const matchSearch =
-          !searchQuery ||
-          u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          u.email.toLowerCase().includes(searchQuery.toLowerCase())
-        return matchRole && matchSearch
-      })
+      return demoAdminRaw()
+        .profiles.filter(matches)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
     }
 
-    try {
-      let query = supabase.from('profiles').select('*').order('created_at', { ascending: false })
-
-      if (roleFilter && roleFilter !== 'all') {
-        query = query.eq('role', roleFilter)
-      }
-      if (searchQuery) {
-        query = query.ilike('full_name', `%${searchQuery}%`)
-      }
-
-      const { data, error } = await withTimeout(query, 2500)
-      if (error || !data || data.length === 0) {
-        return demoProfiles.filter((u) => {
-          const matchRole = !roleFilter || roleFilter === 'all' || u.role === roleFilter
-          const matchSearch =
-            !searchQuery ||
-            u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            u.email.toLowerCase().includes(searchQuery.toLowerCase())
-          return matchRole && matchSearch
-        })
-      }
-      return data as Profile[]
-    } catch {
-      return demoProfiles
+    let query = supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(200)
+    if (roleFilter && roleFilter !== 'all') query = query.eq('role', roleFilter)
+    if (q) {
+      // Tìm theo cả tên và email (trước đây chỉ tìm theo tên). Loại ký tự đặc biệt của cú pháp filter.
+      const safe = q.replace(/[%,()]/g, ' ')
+      query = query.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`)
     }
+    const { data, error } = await withTimeout(query)
+    if (error) throw error
+    return (data || []) as Profile[]
   },
 
-  async updateUserRole(userId: string, newRole: AppRole): Promise<{ success: boolean; error?: string }> {
-    if (isSupabaseConfigured) {
-      try {
-        const { error } = await withTimeout(
-          supabase
-            .from('profiles')
-            .update({ role: newRole, updated_at: new Date().toISOString() })
-            .eq('id', userId),
-          2500
-        )
-
-        if (error) return { success: false, error: error.message }
-        return { success: true }
-      } catch (err: unknown) {
-        return { success: false, error: err instanceof Error ? err.message : 'Lỗi cập nhật vai trò' }
-      }
+  async updateUserRole(userId: string, newRole: AppRole, actingAdminId: string): Promise<void> {
+    if (userId === actingAdminId && newRole !== 'admin') {
+      throw new ServiceError('Bạn không thể tự hạ quyền tài khoản Admin đang đăng nhập.')
     }
-    return { success: true }
+    if (!isSupabaseConfigured) {
+      demoDb.write((t) => {
+        const p = t.profiles.find((x) => x.id === userId)
+        if (!p) throw new ServiceError('Tài khoản demo tự đăng ký chỉ được đổi vai trò khi dùng Supabase.')
+        p.role = newRole
+      })
+      return
+    }
+    const { error } = await withTimeout(supabase.from('profiles').update({ role: newRole }).eq('id', userId))
+    if (error) throw error
   },
 
   async getCourses(): Promise<AdminCourseItem[]> {
-    const shared = sharedStore.getSharedCourses()
-    if (!isSupabaseConfigured) {
-      return shared.map((c) => ({
-        id: c.id,
-        title: c.title,
-        category: c.category,
-        instructor_name: c.instructor_name || 'Giảng viên',
-        lessons_count: c.lessons_count || 12,
-        students_count: c.students_count || 0,
-        status: c.status,
-        created_at: c.created_at,
-      }))
-    }
-
-    try {
-      const { data } = await withTimeout(
-        supabase
-          .from('courses')
-          .select(`
-            id,
-            title,
-            category,
-            status,
-            created_at,
-            profiles:teacher_id (full_name)
-          `)
-          .order('created_at', { ascending: false }),
-        2500
-      )
-
-      if (data && data.length > 0) {
-        interface AdminCourseRow {
-          id: string
-          title: string
-          category?: string
-          status?: 'draft' | 'pending' | 'published'
-          created_at: string
-          profiles?: { full_name?: string } | null
-        }
-        const courseRows = data as unknown as AdminCourseRow[]
-        const sbCourses = courseRows.map((item) => ({
-          id: item.id,
-          title: item.title,
-          category: item.category || 'Tổng hợp',
-          instructor_name: item.profiles?.full_name || 'Giảng viên',
-          lessons_count: 12,
-          students_count: 35,
-          status: item.status || 'draft',
-          created_at: item.created_at,
-        }))
-
-        // Gộp các khóa học tạo từ sharedStore (tránh trùng id)
-        const sbIds = new Set(sbCourses.map((c) => c.id))
-        const extras = shared
-          .filter((c) => !sbIds.has(c.id))
-          .map((c) => ({
-            id: c.id,
-            title: c.title,
-            category: c.category,
-            instructor_name: c.instructor_name || 'Giảng viên',
-            lessons_count: c.lessons_count || 0,
-            students_count: 0,
-            status: c.status,
-            created_at: c.created_at,
-          }))
-
-        return [...extras, ...sbCourses]
-      }
-    } catch {
-      // fallback
-    }
-
-    return shared.map((c) => ({
+    const raw = await loadAdminRaw()
+    return raw.courses.map((c) => ({
       id: c.id,
       title: c.title,
-      category: c.category,
-      instructor_name: c.instructor_name || 'Giảng viên',
-      lessons_count: c.lessons_count || 12,
-      students_count: c.students_count || 0,
+      category: c.category || 'Tổng hợp',
+      instructor_name: raw.profiles.find((p) => p.id === c.teacher_id)?.full_name || 'Giảng viên',
+      lessons_count: raw.lessons.filter((l) => l.course_id === c.id).length,
+      students_count: raw.enrollments.filter((e) => e.course_id === c.id && e.status !== 'dropped').length,
       status: c.status,
       created_at: c.created_at,
     }))
   },
 
-  async updateCourseStatus(courseId: string, status: 'draft' | 'published' | 'archived'): Promise<boolean> {
-    // 1. Cập nhật vào sharedStore trước để đảm bảo tính nhất quán
-    sharedStore.updateSharedCourseStatus(courseId, status)
-
-    // 2. Tự động gửi thông báo cho Giảng viên về kết quả duyệt khóa học
-    const allCourses = sharedStore.getSharedCourses()
-    const targetCourse = allCourses.find((c) => c.id === courseId)
-    const courseTitle = targetCourse ? targetCourse.title : 'của bạn'
-    
-    sharedStore.addSharedNotification({
-      title: status === 'published' ? 'Khóa học đã được phê duyệt!' : 'Khóa học chuyển về bản nháp',
-      message: `Khóa học "${courseTitle}" đã được Quản trị viên ${status === 'published' ? 'phê duyệt và chính thức xuất bản trên hệ thống.' : 'thu hồi về trạng thái bản nháp.'}`,
-      type: status === 'published' ? 'success' : 'warning',
-      target: 'teachers',
-      user_id: targetCourse?.teacher_id,
-    })
-
-    if (isSupabaseConfigured) {
-      try {
-        await withTimeout(
-          supabase
-            .from('courses')
-            .update({ status, updated_at: new Date().toISOString() })
-            .eq('id', courseId),
-          2500
-        )
-      } catch (err) {
-        console.warn('Lỗi cập nhật trạng thái khóa học Supabase:', err)
-      }
+  /** Duyệt / thu hồi khóa học và báo cho giảng viên. Ném lỗi nếu thất bại. */
+  async updateCourseStatus(courseId: string, status: 'draft' | 'published' | 'archived'): Promise<void> {
+    let course: { title: string; teacher_id: string } | undefined
+    if (!isSupabaseConfigured) {
+      course = demoDb.write((t) => {
+        const c = t.courses.find((x) => x.id === courseId)
+        if (!c) throw new ServiceError('Không tìm thấy khóa học.')
+        c.status = status
+        return { title: c.title, teacher_id: c.teacher_id }
+      }, 'eduai:courses_updated', { courseId, status })
+    } else {
+      const { data, error } = await withTimeout(
+        supabase.from('courses').update({ status }).eq('id', courseId).select('title, teacher_id').single()
+      )
+      if (error) throw error
+      course = data as { title: string; teacher_id: string }
     }
-    return true
+
+    try {
+      await notificationService.send({
+        title: status === 'published' ? 'Khóa học đã được phê duyệt!' : 'Khóa học chuyển về bản nháp',
+        message: `Khóa học "${course.title}" đã được Quản trị viên ${
+          status === 'published' ? 'phê duyệt và chính thức xuất bản trên hệ thống.' : 'thu hồi về trạng thái bản nháp.'
+        }`,
+        type: status === 'published' ? 'success' : 'warning',
+        userId: course.teacher_id,
+      })
+    } catch (err) {
+      console.warn('Không gửi được thông báo cho giảng viên:', err)
+    }
   },
 
   async getQuizzes(): Promise<AdminQuizItem[]> {
-    if (!isSupabaseConfigured) {
-      return fallbackQuizzesList
-    }
-
-    try {
-      const { data, error } = await withTimeout(
-        supabase
-          .from('quizzes')
-          .select(`
-            id,
-            title,
-            time_limit_minutes,
-            pass_score,
-            status,
-            courses:course_id (title)
-          `),
-        2500
-      )
-
-      if (error || !data || data.length === 0) {
-        return fallbackQuizzesList
-      }
-
-      interface AdminQuizRow {
-        id: string
-        title: string
-        time_limit_minutes?: number
-        pass_score?: number
-        status?: 'draft' | 'published'
-        courses?: { title?: string } | null
-      }
-      const quizRows = data as unknown as AdminQuizRow[]
-      return quizRows.map((q) => ({
+    const raw = await loadAdminRaw()
+    return raw.quizzes.map((q) => {
+      const attempts = raw.attempts.filter((a) => a.quiz_id === q.id)
+      return {
         id: q.id,
         title: q.title,
-        course_title: q.courses?.title || 'Khóa học',
-        questions_count: 10,
-        time_limit_minutes: q.time_limit_minutes || 15,
-        pass_score: q.pass_score || 50,
-        status: q.status || 'draft',
-        attempts_count: 24,
-        avg_score: 75,
-      }))
-    } catch {
-      return fallbackQuizzesList
+        course_title: raw.courses.find((c) => c.id === q.course_id)?.title || 'Khóa học',
+        questions_count: q.questions_count,
+        time_limit_minutes: q.time_limit_minutes,
+        pass_score: q.pass_score,
+        status: q.status,
+        attempts_count: attempts.length,
+        avg_score: avg(attempts.map((a) => a.score)),
+      }
+    })
+  },
+
+  async getReport(): Promise<AdminReport> {
+    const raw = await loadAdminRaw()
+    const categories = [...new Set(raw.courses.map((c) => c.category || 'Tổng hợp'))]
+    const subjects: SubjectReportRow[] = categories.map((cat) => {
+      const courseIds = new Set(raw.courses.filter((c) => (c.category || 'Tổng hợp') === cat).map((c) => c.id))
+      const quizIds = new Set(raw.quizzes.filter((q) => courseIds.has(q.course_id)).map((q) => q.id))
+      const attempts = raw.attempts.filter((a) => quizIds.has(a.quiz_id))
+      return {
+        category: cat,
+        courses: courseIds.size,
+        students: new Set(raw.enrollments.filter((e) => courseIds.has(e.course_id)).map((e) => e.student_id)).size,
+        attempts: attempts.length,
+        avgScore: avg(attempts.map((a) => a.score)),
+        passRate: pct(attempts.filter((a) => a.is_passed).length, attempts.length),
+      }
+    })
+    const buckets = [
+      { label: 'Giỏi (85–100)', min: 85, max: 100 },
+      { label: 'Khá (70–84)', min: 70, max: 84.99 },
+      { label: 'Trung bình (50–69)', min: 50, max: 69.99 },
+      { label: 'Yếu (< 50)', min: 0, max: 49.99 },
+    ]
+    const total = raw.attempts.length
+    return {
+      subjects,
+      gradeDistribution: buckets.map((b) => {
+        const count = raw.attempts.filter((a) => a.score >= b.min && a.score <= b.max).length
+        return { label: b.label, count, percent: pct(count, total) ?? 0 }
+      }),
+      totalAttempts: total,
+      overallAvgScore: avg(raw.attempts.map((a) => a.score)),
+      overallPassRate: pct(raw.attempts.filter((a) => a.is_passed).length, total),
+      courseCompletionRate: pct(
+        raw.enrollments.filter((e) => e.status === 'completed').length,
+        raw.enrollments.filter((e) => e.status !== 'dropped').length
+      ),
     }
   },
 
+  /** Lịch sử thông báo hệ thống. */
   async getNotifications(): Promise<SystemNotificationItem[]> {
-    const shared = sharedStore.getSharedNotifications('admin')
     if (!isSupabaseConfigured) {
-      return shared.map((n) => ({
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        type: n.type || 'info',
-        created_at: n.created_at,
-        target: (n.target || 'all') as 'all' | 'students' | 'teachers',
-      }))
-    }
-
-    try {
-      const { data } = await withTimeout(
-        supabase
-          .from('notifications')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        2500
-      )
-
-      if (data && data.length > 0) {
-        interface NoticeRow {
-          id: string
-          title: string
-          message: string
-          type?: string
-          created_at: string
-          target?: string
-        }
-        const noticeRows = data as unknown as NoticeRow[]
-        const sbNotices: SystemNotificationItem[] = noticeRows.map((n) => ({
+      return demoDb
+        .read()
+        .notifications.sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((n) => ({
           id: n.id,
           title: n.title,
           message: n.message,
-          type: n.type || 'info',
+          type: n.type,
           created_at: n.created_at,
-          target: (n.target || 'all') as 'all' | 'students' | 'teachers',
+          target: n.user_id ? 'user' : n.target,
         }))
-
-        const sbIds = new Set(sbNotices.map((n) => n.id))
-        const extras: SystemNotificationItem[] = shared
-          .filter((n) => !sbIds.has(n.id))
-          .map((n) => ({
-            id: n.id,
-            title: n.title,
-            message: n.message,
-            type: n.type || 'info',
-            created_at: n.created_at,
-            target: (n.target || 'all') as 'all' | 'students' | 'teachers',
-          }))
-
-        return [...extras, ...sbNotices]
-      }
-    } catch {
-      // fallback
     }
-
-    return shared.map((n) => ({
-      id: n.id,
-      title: n.title,
-      message: n.message,
-      type: n.type || 'info',
-      created_at: n.created_at,
-      target: (n.target || 'all') as 'all' | 'students' | 'teachers',
-    }))
+    // Mỗi người nhận có 1 dòng -> gộp các dòng cùng nội dung gửi cùng lúc thành 1 mục lịch sử
+    const { data, error } = await withTimeout(
+      supabase.from('notifications').select('id, title, message, type, created_at').order('created_at', { ascending: false }).limit(500)
+    )
+    if (error) throw error
+    const seen = new Map<string, SystemNotificationItem>()
+    ;((data || []) as { id: string; title: string; message: string; type: string | null; created_at: string }[]).forEach((n) => {
+      const key = `${n.title}|${n.message}|${n.created_at.slice(0, 16)}`
+      if (!seen.has(key)) {
+        seen.set(key, { id: n.id, title: n.title, message: n.message, type: n.type || 'info', created_at: n.created_at, target: 'all' })
+      }
+    })
+    return [...seen.values()]
   },
 
-  async createNotification(
-    title: string,
-    message: string,
-    type = 'info',
-    target: 'all' | 'students' | 'teachers' = 'all'
-  ): Promise<boolean> {
-    // 1. Luôn lưu vào sharedStore để tất cả các tài khoản demo (học viên / giảng viên) nhận được ngay lập tức
-    sharedStore.addSharedNotification({
-      title,
-      message,
-      type,
-      target,
-    })
-
-    // 2. Nếu có Supabase, gửi thêm vào cơ sở dữ liệu
-    if (isSupabaseConfigured) {
-      try {
-        let query = supabase.from('profiles').select('id, role')
-        if (target === 'students') {
-          query = query.eq('role', 'student')
-        } else if (target === 'teachers') {
-          query = query.eq('role', 'teacher')
-        }
-
-        const { data: profiles } = await withTimeout(query, 2500)
-        if (profiles && profiles.length > 0) {
-          const profileRows = profiles as { id: string }[]
-          const rows = profileRows.map((p) => ({
-            user_id: p.id,
-            title,
-            message,
-            type,
-          }))
-          await withTimeout(supabase.from('notifications').insert(rows), 2500)
-        }
-      } catch (err) {
-        console.warn('Lỗi gửi thông báo qua Supabase:', err)
-      }
-    }
-
-    return true
+  /** Gửi thông báo hệ thống. Ném lỗi nếu thất bại; trả về số người nhận. */
+  async createNotification(title: string, message: string, type = 'info', target: NotificationTarget = 'all'): Promise<number> {
+    if (!title.trim() || !message.trim()) throw new ServiceError('Vui lòng nhập tiêu đề và nội dung thông báo.')
+    return notificationService.send({ title: title.trim(), message: message.trim(), type, target })
   },
 }

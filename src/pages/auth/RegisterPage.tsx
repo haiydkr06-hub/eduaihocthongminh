@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import type { AppRole } from '../../types/auth';
 import { getFriendlyErrorMessage } from '../../lib/errorMessage';
+import { AuthShowcase } from '../../components/auth/AuthShowcase';
+import { AuroraBackground } from '../../components/layout/AppShell';
 
 export default function RegisterPage() {
   const [role, setRole] = useState<'student' | 'teacher'>('student');
@@ -81,26 +82,10 @@ export default function RegisterPage() {
 
     try {
       // 1. Thử đăng ký qua AuthContext (tương thích cả demo lẫn Supabase đã cấu hình)
-      const res = await signUp(trimmedEmail, password, trimmedName, role as AppRole);
-      
+      const res = await signUp(trimmedEmail, password, trimmedName, role as AppRole, trimmedPhone);
       if (res?.error) {
-        // Fallback gọi trực tiếp Supabase Auth
-        const { error: sbError } = await supabase.auth.signUp({
-          email: trimmedEmail,
-          password: password,
-          options: {
-            data: {
-              full_name: trimmedName,
-              phone: trimmedPhone,
-              role: role,
-            },
-          },
-        });
-
-        if (sbError) {
-          setError(getFriendlyErrorMessage(sbError, 'Đăng ký không thành công. Vui lòng thử lại.'));
-          return;
-        }
+        setError(getFriendlyErrorMessage(res.error, 'Đăng ký không thành công. Vui lòng thử lại.'));
+        return;
       }
 
       setSuccess(`Đăng ký tài khoản ${role === 'teacher' ? 'Giảng viên' : 'Học viên'} thành công! Đang tự động chuyển hướng...`);
@@ -115,8 +100,11 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-[#f7f8fa] py-10 px-4 font-sans">
-      <div className="max-w-[500px] w-full bg-white rounded-2xl shadow-sm border border-gray-200/90 p-8 relative">
+    <div className="min-h-screen grid lg:grid-cols-[1.1fr_1fr]">
+      <AuthShowcase />
+      <section className="relative isolate overflow-hidden flex items-center justify-center py-10 px-4 sm:px-10">
+      <AuroraBackground contained />
+      <div className="auth-card relative max-w-[500px] w-full rounded-[28px] bg-white/75 backdrop-blur-xl border border-white shadow-[0_30px_70px_-30px_rgba(76,61,190,0.45)] p-7 sm:p-9">
         
         {/* Nút quay lại */}
         <a
@@ -131,7 +119,7 @@ export default function RegisterPage() {
 
         {/* Tiêu đề & Logo */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-11 h-11 bg-primary-600 text-white rounded-xl shadow-md mb-2 text-xl font-black">
+          <div className="brand-orb inline-flex items-center justify-center w-12 h-12 text-[#ffd6ec] rounded-2xl shadow-lg mb-2 text-xl font-black">
             E
           </div>
           <h2 className="text-2xl font-extrabold text-primary-900 tracking-tight">Tạo tài khoản EduAI</h2>
@@ -229,7 +217,7 @@ export default function RegisterPage() {
                 disabled={loading}
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800 disabled:opacity-60"
+                className="w-full px-3.5 py-2.5 bg-white/80 border border-[#e6e3f5] rounded-2xl focus:bg-white focus:ring-4 focus:ring-[#8b7bff]/15 focus:border-[#8b7bff] outline-none transition text-sm text-gray-800 disabled:opacity-60"
                 placeholder="Nguyễn Văn A"
               />
             </div>
@@ -240,7 +228,7 @@ export default function RegisterPage() {
                 disabled={loading}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800 disabled:opacity-60"
+                className="w-full px-3.5 py-2.5 bg-white/80 border border-[#e6e3f5] rounded-2xl focus:bg-white focus:ring-4 focus:ring-[#8b7bff]/15 focus:border-[#8b7bff] outline-none transition text-sm text-gray-800 disabled:opacity-60"
                 placeholder="0912345678"
               />
             </div>
@@ -254,7 +242,7 @@ export default function RegisterPage() {
               disabled={loading}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm text-gray-800 disabled:opacity-60"
+              className="w-full px-3.5 py-2.5 bg-white/80 border border-[#e6e3f5] rounded-2xl focus:bg-white focus:ring-4 focus:ring-[#8b7bff]/15 focus:border-[#8b7bff] outline-none transition text-sm text-gray-800 disabled:opacity-60"
               placeholder="nhap@email.com"
             />
           </div>
@@ -268,7 +256,7 @@ export default function RegisterPage() {
                 disabled={loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition pr-10 text-sm text-gray-800 disabled:opacity-60"
+                className="w-full px-3.5 py-2.5 bg-white/80 border border-[#e6e3f5] rounded-2xl focus:bg-white focus:ring-4 focus:ring-[#8b7bff]/15 focus:border-[#8b7bff] outline-none transition pr-10 text-sm text-gray-800 disabled:opacity-60"
                 placeholder="Tối thiểu 6 ký tự"
               />
               <button
@@ -297,7 +285,7 @@ export default function RegisterPage() {
                 disabled={loading}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition pr-10 text-sm text-gray-800 disabled:opacity-60"
+                className="w-full px-3.5 py-2.5 bg-white/80 border border-[#e6e3f5] rounded-2xl focus:bg-white focus:ring-4 focus:ring-[#8b7bff]/15 focus:border-[#8b7bff] outline-none transition pr-10 text-sm text-gray-800 disabled:opacity-60"
                 placeholder="Nhập lại mật khẩu"
               />
               <button
@@ -344,7 +332,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary-600 text-white font-bold py-2.5 px-4 rounded-xl hover:bg-primary-700 transition duration-150 disabled:opacity-50 shadow-sm shadow-primary-600/30 flex items-center justify-center gap-2 mt-4"
+            className="btn-glow w-full text-white font-bold py-3.5 px-4 rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
           >
             {loading ? (
               <>
@@ -368,6 +356,7 @@ export default function RegisterPage() {
           </a>
         </p>
       </div>
+      </section>
     </div>
   );
 }

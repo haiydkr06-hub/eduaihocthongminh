@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { dashboardForRole } from '../../lib/demoAccounts'
 
 export function RootRedirect() {
   const { user, profile, role, loading } = useAuth()
@@ -17,14 +18,5 @@ export function RootRedirect() {
     return <Navigate to="/login" replace />
   }
 
-  const effectiveRole = profile?.role || role || user.user_metadata?.role || 'student'
-
-  switch (effectiveRole) {
-    case 'admin':
-      return <Navigate to="/admin/dashboard" replace />
-    case 'teacher':
-      return <Navigate to="/teacher/dashboard" replace />
-    default:
-      return <Navigate to="/student/dashboard" replace />
-  }
+  return <Navigate to={dashboardForRole(profile?.role || role)} replace />
 }

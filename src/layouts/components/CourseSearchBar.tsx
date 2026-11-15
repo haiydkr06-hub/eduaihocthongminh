@@ -139,10 +139,12 @@ export function CourseSearchBar() {
     return () => clearTimeout(timeoutId)
   }, [searchTerm])
 
+  // Mở trang khóa học với từ khóa là tên khóa: học viên đăng ký (nếu chưa) hoặc vào học ngay tại đó
   const handleSelectCourse = (courseId: string) => {
+    const course = results.find((c) => c.id === courseId)
     setIsOpen(false)
     setSearchTerm('')
-    navigate(`/student/learn/${courseId}`)
+    navigate(`/student/courses?search=${encodeURIComponent(course?.title || '')}`)
   }
 
   const handleViewAllResults = () => {
