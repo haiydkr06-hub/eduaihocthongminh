@@ -9,7 +9,14 @@ import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import { RootRedirect } from '../components/auth/RootRedirect'
 import { StudentDashboardPage } from '../pages/student/StudentDashboardPage'
 import { TeacherDashboardPage } from '../pages/teacher/TeacherDashboardPage'
+import { AdminLayout } from '../components/layout/AdminLayout'
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage'
+import { AdminUsersPage } from '../pages/admin/AdminUsersPage'
+import { AdminCoursesPage } from '../pages/admin/AdminCoursesPage'
+import { AdminQuizzesPage } from '../pages/admin/AdminQuizzesPage'
+import { AdminReportsPage } from '../pages/admin/AdminReportsPage'
+import { AdminNotificationsPage } from '../pages/admin/AdminNotificationsPage'
+import { AdminSettingsPage } from '../pages/admin/AdminSettingsPage'
 
 export const router = createBrowserRouter([
   {
@@ -75,12 +82,41 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute allowedRoles={['admin']} />,
     children: [
       {
-        path: '',
-        element: <Navigate to="/admin/dashboard" replace />,
-      },
-      {
-        path: 'dashboard',
-        element: <AdminDashboardPage />,
+        element: <AdminLayout />,
+        children: [
+          {
+            path: '',
+            element: <Navigate to="/admin/dashboard" replace />,
+          },
+          {
+            path: 'dashboard',
+            element: <AdminDashboardPage />,
+          },
+          {
+            path: 'users',
+            element: <AdminUsersPage />,
+          },
+          {
+            path: 'courses',
+            element: <AdminCoursesPage />,
+          },
+          {
+            path: 'quizzes',
+            element: <AdminQuizzesPage />,
+          },
+          {
+            path: 'reports',
+            element: <AdminReportsPage />,
+          },
+          {
+            path: 'notifications',
+            element: <AdminNotificationsPage />,
+          },
+          {
+            path: 'settings',
+            element: <AdminSettingsPage />,
+          },
+        ],
       },
     ],
   },
