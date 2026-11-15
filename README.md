@@ -2,6 +2,8 @@
 
 EduAI là nền tảng học trực tuyến cho **3 vai trò: Học viên, Giảng viên, Quản trị viên**, xây dựng bằng React 19 + TypeScript + Vite + Tailwind CSS + Supabase, có các chức năng AI hỗ trợ giảng dạy.
 
+> 🌐 **Bản chạy trực tiếp:** https://eduai-hoc-thong-minh.vercel.app — đăng nhập bằng tài khoản demo bên dưới (mật khẩu `123456`).
+
 [![React](https://img.shields.io/badge/React-19-149eca?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite)](https://vite.dev/)
