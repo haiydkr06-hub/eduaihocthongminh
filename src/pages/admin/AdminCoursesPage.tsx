@@ -25,12 +25,18 @@ export function AdminCoursesPage() {
 
   useEffect(() => {
     let active = true
-    adminService.getCourses().then((data) => {
-      if (active) {
-        setCourses(data)
-        setLoading(false)
-      }
-    })
+    adminService.getCourses()
+      .then((data) => {
+        if (active) {
+          setCourses(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

@@ -45,12 +45,18 @@ export function TeacherCoursesPage() {
 
   useEffect(() => {
     let active = true
-    teacherService.getCourses(profile?.id).then((data) => {
-      if (active) {
-        setCourses(data)
-        setLoading(false)
-      }
-    })
+    teacherService.getCourses(profile?.id)
+      .then((data) => {
+        if (active) {
+          setCourses(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

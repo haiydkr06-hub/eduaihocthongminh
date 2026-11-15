@@ -34,12 +34,18 @@ export function TeacherQuizzesPage() {
 
   useEffect(() => {
     let active = true
-    teacherService.getQuizzes().then((data) => {
-      if (active) {
-        setQuizzes(data)
-        setLoading(false)
-      }
-    })
+    teacherService.getQuizzes()
+      .then((data) => {
+        if (active) {
+          setQuizzes(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

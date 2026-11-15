@@ -23,10 +23,22 @@ export function AdminDashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    adminService.getStats().then((data) => {
-      setStats(data)
-      setLoading(false)
-    })
+    let active = true
+    adminService.getStats()
+      .then((data) => {
+        if (active) {
+          setStats(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   return (

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Sparkles, Lock, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
@@ -12,6 +12,13 @@ export function ResetPasswordPage() {
 
   const { updatePassword } = useAuth()
   const navigate = useNavigate()
+
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -36,18 +43,26 @@ export function ResetPasswordPage() {
     try {
       const { error } = await updatePassword(newPassword)
       if (error) {
-        setErrorMsg(error.message || 'Không thể cập nhật mật khẩu.')
+        if (mountedRef.current) {
+          setErrorMsg(error.message || 'Không thể cập nhật mật khẩu.')
+        }
       } else {
-        setSuccessMsg('Đổi mật khẩu thành công! Đang chuyển về trang Đăng nhập...')
+        if (mountedRef.current) {
+          setSuccessMsg('Đổi mật khẩu thành công! Đang chuyển về trang Đăng nhập...')
+        }
         setTimeout(() => {
           navigate('/login', { replace: true })
         }, 1500)
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra'
-      setErrorMsg(msg)
+      if (mountedRef.current) {
+        const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra'
+        setErrorMsg(msg)
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 

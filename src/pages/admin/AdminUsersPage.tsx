@@ -26,12 +26,18 @@ export function AdminUsersPage() {
 
   useEffect(() => {
     let active = true
-    adminService.getUsers(roleFilter, searchQuery).then((data) => {
-      if (active) {
-        setUsers(data)
-        setLoading(false)
-      }
-    })
+    adminService.getUsers(roleFilter, searchQuery)
+      .then((data) => {
+        if (active) {
+          setUsers(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

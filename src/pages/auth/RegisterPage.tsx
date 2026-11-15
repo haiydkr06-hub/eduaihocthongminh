@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Sparkles, Mail, Lock, User as UserIcon, UserPlus, AlertCircle, CheckCircle } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
@@ -15,6 +15,13 @@ export function RegisterPage() {
 
   const { signUp } = useAuth()
   const navigate = useNavigate()
+
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -35,9 +42,13 @@ export function RegisterPage() {
     try {
       const { error, user } = await signUp(email.trim(), password, fullName.trim(), role)
       if (error) {
-        setErrorMsg(error.message || 'Đăng ký tài khoản không thành công.')
+        if (mountedRef.current) {
+          setErrorMsg(error.message || 'Đăng ký tài khoản không thành công.')
+        }
       } else if (user) {
-        setSuccessMsg('Đăng ký tài khoản thành công! Đang chuyển hướng...')
+        if (mountedRef.current) {
+          setSuccessMsg('Đăng ký tài khoản thành công! Đang chuyển hướng...')
+        }
         setTimeout(() => {
           if (role === 'teacher') {
             navigate('/teacher/dashboard', { replace: true })
@@ -47,10 +58,14 @@ export function RegisterPage() {
         }, 1500)
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra'
-      setErrorMsg(msg)
+      if (mountedRef.current) {
+        const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra'
+        setErrorMsg(msg)
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Clock,
@@ -26,15 +26,26 @@ export function StudentQuizPage() {
   const [result, setResult] = useState<QuizResultItem | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const selectedAnswersRef = useRef(selectedAnswers)
+  useEffect(() => {
+    selectedAnswersRef.current = selectedAnswers
+  }, [selectedAnswers])
+
   useEffect(() => {
     let active = true
-    studentService.getQuiz(quizId || 'q-1').then((data) => {
-      if (active) {
-        setQuiz(data)
-        setSecondsRemaining(data.time_limit_minutes * 60)
-        setLoading(false)
-      }
-    })
+    studentService.getQuiz(quizId || 'q-1')
+      .then((data) => {
+        if (active) {
+          setQuiz(data)
+          setSecondsRemaining(data.time_limit_minutes * 60)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }
@@ -43,10 +54,13 @@ export function StudentQuizPage() {
   const handleSubmit = useCallback(async () => {
     if (!quiz || !profile?.id) return
     setSubmitting(true)
-    const res = await studentService.submitQuizAttempt(quiz.id, profile.id, selectedAnswers)
-    setResult(res)
-    setSubmitting(false)
-  }, [quiz, profile, selectedAnswers])
+    try {
+      const res = await studentService.submitQuizAttempt(quiz.id, profile.id, selectedAnswersRef.current)
+      setResult(res)
+    } finally {
+      setSubmitting(false)
+    }
+  }, [quiz, profile?.id])
 
   // Timer countdown
   useEffect(() => {

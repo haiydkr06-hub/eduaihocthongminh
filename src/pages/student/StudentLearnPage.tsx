@@ -37,12 +37,18 @@ export function StudentLearnPage() {
 
   useEffect(() => {
     let active = true
-    studentService.getLessons(courseId || 'tc-1', profile?.id).then((data) => {
-      if (active) {
-        setLessons(data)
-        setLoading(false)
-      }
-    })
+    studentService.getLessons(courseId || 'tc-1', profile?.id)
+      .then((data) => {
+        if (active) {
+          setLessons(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Sparkles, Mail, Send, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
@@ -10,6 +10,13 @@ export function ForgotPasswordPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   const { resetPassword } = useAuth()
+
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -25,17 +32,25 @@ export function ForgotPasswordPage() {
     try {
       const { error } = await resetPassword(email.trim())
       if (error) {
-        setErrorMsg(error.message || 'Không thể gửi email đặt lại mật khẩu.')
+        if (mountedRef.current) {
+          setErrorMsg(error.message || 'Không thể gửi email đặt lại mật khẩu.')
+        }
       } else {
-        setSuccessMsg(
-          'Email hướng dẫn khôi phục mật khẩu đã được gửi! Vui lòng kiểm tra hộp thư đến của bạn.'
-        )
+        if (mountedRef.current) {
+          setSuccessMsg(
+            'Email hướng dẫn khôi phục mật khẩu đã được gửi! Vui lòng kiểm tra hộp thư đến của bạn.'
+          )
+        }
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra'
-      setErrorMsg(msg)
+      if (mountedRef.current) {
+        const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra'
+        setErrorMsg(msg)
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 

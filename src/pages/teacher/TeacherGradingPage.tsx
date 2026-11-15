@@ -30,12 +30,18 @@ export function TeacherGradingPage() {
 
   useEffect(() => {
     let active = true
-    teacherService.getSubmissions().then((data) => {
-      if (active) {
-        setSubmissions(data)
-        setLoading(false)
-      }
-    })
+    teacherService.getSubmissions()
+      .then((data) => {
+        if (active) {
+          setSubmissions(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

@@ -17,10 +17,22 @@ export function AdminQuizzesPage() {
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
-    adminService.getQuizzes().then((data) => {
-      setQuizzes(data)
-      setLoading(false)
-    })
+    let active = true
+    adminService.getQuizzes()
+      .then((data) => {
+        if (active) {
+          setQuizzes(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   const filteredQuizzes = quizzes.filter((q) => {

@@ -39,13 +39,19 @@ export function StudentCoursesPage() {
     Promise.all([
       studentService.getMyCourses(profile?.id),
       studentService.getAllAvailableCourses(),
-    ]).then(([mine, available]) => {
-      if (active) {
-        setMyCourses(mine)
-        setAllCourses(available)
-        setLoading(false)
-      }
-    })
+    ])
+      .then(([mine, available]) => {
+        if (active) {
+          setMyCourses(mine)
+          setAllCourses(available)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

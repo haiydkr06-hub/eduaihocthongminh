@@ -26,12 +26,18 @@ export function AdminNotificationsPage() {
 
   useEffect(() => {
     let active = true
-    adminService.getNotifications().then((data) => {
-      if (active) {
-        setNotifications(data)
-        setLoading(false)
-      }
-    })
+    adminService.getNotifications()
+      .then((data) => {
+        if (active) {
+          setNotifications(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

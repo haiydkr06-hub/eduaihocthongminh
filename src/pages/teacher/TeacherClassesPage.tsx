@@ -15,12 +15,18 @@ export function TeacherClassesPage() {
 
   useEffect(() => {
     let active = true
-    teacherService.getStudents().then((data) => {
-      if (active) {
-        setStudents(data)
-        setLoading(false)
-      }
-    })
+    teacherService.getStudents()
+      .then((data) => {
+        if (active) {
+          setStudents(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

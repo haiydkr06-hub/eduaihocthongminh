@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase, isSupabaseConfigured, withTimeout } from '../lib/supabase'
 
 export interface TeacherStats {
   totalCourses: number
@@ -62,44 +62,90 @@ export interface StudentSubmission {
   status: 'pending' | 'graded'
 }
 
+const fallbackCourses: TeacherCourse[] = [
+  {
+    id: 'tc-1',
+    title: 'Toán học tư duy bậc THPT',
+    category: 'Toán học',
+    status: 'published',
+    lessonsCount: 18,
+    studentsCount: 38,
+    createdAt: '2026-02-15',
+    description: 'Chương trình rèn luyện phương pháp giải toán hàm số và hình học không gian.',
+  },
+  {
+    id: 'tc-2',
+    title: 'Hình học giải tích và ứng dụng không gian',
+    category: 'Toán học',
+    status: 'published',
+    lessonsCount: 12,
+    studentsCount: 26,
+    createdAt: '2026-03-01',
+    description: 'Các chuyên đề chuyên sâu về tọa độ Oxyz và mặt cầu, mặt phẳng.',
+  },
+  {
+    id: 'tc-3',
+    title: 'Đại số tổ hợp và Xác suất thống kê',
+    category: 'Toán học',
+    status: 'draft',
+    lessonsCount: 8,
+    studentsCount: 14,
+    createdAt: '2026-04-10',
+    description: 'Học lý thuyết xác suất qua các ví dụ thực tế và bài tập trắc nghiệm.',
+  },
+]
+
 export const teacherService = {
   async getStats(teacherId?: string): Promise<TeacherStats> {
-    try {
-      if (teacherId) {
-        const { data: courses } = await supabase.from('courses').select('id').eq('teacher_id', teacherId)
-        const courseIds = (courses || []).map(c => c.id)
-
-        let studentCount = 0
-        if (courseIds.length > 0) {
-          const { data: enrollments } = await supabase.from('enrollments').select('id').in('course_id', courseIds)
-          studentCount = enrollments?.length || 0
-        }
-
-        return {
-          totalCourses: courses?.length || 4,
-          totalStudents: studentCount || 78,
-          pendingGrading: 6,
-          avgRating: 4.8,
-        }
-      }
-    } catch {
-      // fallback
-    }
-    return {
+    const defaultStats: TeacherStats = {
       totalCourses: 4,
       totalStudents: 78,
       pendingGrading: 6,
       avgRating: 4.8,
     }
+
+    if (!isSupabaseConfigured || !teacherId) {
+      return defaultStats
+    }
+
+    try {
+      const { data: courses } = await withTimeout(
+        supabase.from('courses').select('id').eq('teacher_id', teacherId),
+        2500
+      )
+      const courseIds = (courses || []).map((c: any) => c.id)
+
+      let studentCount = 0
+      if (courseIds.length > 0) {
+        const { data: enrollments } = await withTimeout(
+          supabase.from('enrollments').select('id').in('course_id', courseIds),
+          2500
+        )
+        studentCount = enrollments?.length || 0
+      }
+
+      return {
+        totalCourses: courses?.length || 4,
+        totalStudents: studentCount || 78,
+        pendingGrading: 6,
+        avgRating: 4.8,
+      }
+    } catch {
+      return defaultStats
+    }
   },
 
   async getCourses(teacherId?: string): Promise<TeacherCourse[]> {
+    if (!isSupabaseConfigured) {
+      return fallbackCourses
+    }
+
     try {
       let query = supabase.from('courses').select('*, lessons(id), enrollments(id)')
       if (teacherId) {
         query = query.eq('teacher_id', teacherId)
       }
-      const { data, error } = await query
+      const { data, error } = await withTimeout(query, 2500)
 
       if (!error && data && data.length > 0) {
         return data.map((c: any) => ({
@@ -117,68 +163,42 @@ export const teacherService = {
       // fallback demo data
     }
 
-    return [
-      {
-        id: 'tc-1',
-        title: 'Toán học tư duy bậc THPT',
-        category: 'Toán học',
-        status: 'published',
-        lessonsCount: 18,
-        studentsCount: 38,
-        createdAt: '2026-02-15',
-        description: 'Chương trình rèn luyện phương pháp giải toán hàm số và hình học không gian.',
-      },
-      {
-        id: 'tc-2',
-        title: 'Hình học giải tích và ứng dụng không gian',
-        category: 'Toán học',
-        status: 'published',
-        lessonsCount: 12,
-        studentsCount: 26,
-        createdAt: '2026-03-01',
-        description: 'Các chuyên đề chuyên sâu về tọa độ Oxyz và mặt cầu, mặt phẳng.',
-      },
-      {
-        id: 'tc-3',
-        title: 'Đại số tổ hợp và Xác suất thống kê',
-        category: 'Toán học',
-        status: 'draft',
-        lessonsCount: 8,
-        studentsCount: 14,
-        createdAt: '2026-04-10',
-        description: 'Học lý thuyết xác suất qua các ví dụ thực tế và bài tập trắc nghiệm.',
-      },
-    ]
+    return fallbackCourses
   },
 
   async createCourse(teacherId: string, course: { title: string; category: string; description: string }): Promise<TeacherCourse | null> {
-    try {
-      const { data, error } = await supabase
-        .from('courses')
-        .insert({
-          teacher_id: teacherId,
-          title: course.title,
-          category: course.category,
-          description: course.description,
-          status: 'draft',
-        })
-        .select()
-        .single()
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('courses')
+            .insert({
+              teacher_id: teacherId,
+              title: course.title,
+              category: course.category,
+              description: course.description,
+              status: 'draft',
+            })
+            .select()
+            .single(),
+          2500
+        )
 
-      if (!error && data) {
-        return {
-          id: data.id,
-          title: data.title,
-          category: data.category,
-          status: data.status,
-          lessonsCount: 0,
-          studentsCount: 0,
-          createdAt: data.created_at,
-          description: data.description,
+        if (!error && data) {
+          return {
+            id: data.id,
+            title: data.title,
+            category: data.category,
+            status: data.status,
+            lessonsCount: 0,
+            studentsCount: 0,
+            createdAt: data.created_at,
+            description: data.description,
+          }
         }
+      } catch {
+        // local fallback creation
       }
-    } catch {
-      // local fallback creation
     }
 
     return {
@@ -194,18 +214,23 @@ export const teacherService = {
   },
 
   async getLessons(courseId: string): Promise<TeacherLesson[]> {
-    try {
-      const { data, error } = await supabase
-        .from('lessons')
-        .select('*')
-        .eq('course_id', courseId)
-        .order('position', { ascending: true })
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('lessons')
+            .select('*')
+            .eq('course_id', courseId)
+            .order('position', { ascending: true }),
+          2500
+        )
 
-      if (!error && data && data.length > 0) {
-        return data as TeacherLesson[]
+        if (!error && data && data.length > 0) {
+          return data as TeacherLesson[]
+        }
+      } catch {
+        // fallback
       }
-    } catch {
-      // fallback
     }
 
     return [
@@ -240,11 +265,16 @@ export const teacherService = {
   },
 
   async addLesson(lesson: { course_id: string; title: string; content: string; video_url?: string; duration_minutes: number; position: number }): Promise<TeacherLesson> {
-    try {
-      const { data, error } = await supabase.from('lessons').insert(lesson).select().single()
-      if (!error && data) return data as TeacherLesson
-    } catch {
-      // fallback
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase.from('lessons').insert(lesson).select().single(),
+          2500
+        )
+        if (!error && data) return data as TeacherLesson
+      } catch {
+        // fallback
+      }
     }
 
     return {
@@ -403,17 +433,23 @@ export const teacherService = {
   },
 
   async gradeSubmission(subId: string, score: number, _feedback: string): Promise<boolean> {
-    try {
-      await supabase
-        .from('quiz_attempts')
-        .update({
-          score,
-          is_passed: score >= 50,
-        })
-        .eq('id', subId)
-      return true
-    } catch {
-      return true
+    if (isSupabaseConfigured) {
+      try {
+        await withTimeout(
+          supabase
+            .from('quiz_attempts')
+            .update({
+              score,
+              is_passed: score >= 50,
+            })
+            .eq('id', subId),
+          2500
+        )
+        return true
+      } catch {
+        return true
+      }
     }
+    return true
   },
 }

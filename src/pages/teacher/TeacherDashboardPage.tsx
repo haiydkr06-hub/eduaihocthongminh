@@ -21,12 +21,18 @@ export function TeacherDashboardPage() {
 
   useEffect(() => {
     let active = true
-    teacherService.getStats(profile?.id).then((data) => {
-      if (active) {
-        setStats(data)
-        setLoading(false)
-      }
-    })
+    teacherService.getStats(profile?.id)
+      .then((data) => {
+        if (active) {
+          setStats(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
     return () => {
       active = false
     }

@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Sparkles, Mail, Lock, LogIn, AlertCircle, Eye, EyeOff, GraduationCap, UserCheck } from 'lucide-react'
+import { Sparkles, Mail, Lock, LogIn, AlertCircle, Eye, EyeOff, GraduationCap, UserCheck, Shield } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 
 export function LoginPage() {
@@ -15,6 +15,13 @@ export function LoginPage() {
   const [searchParams] = useSearchParams()
   const redirectUrl = searchParams.get('redirect')
 
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const performLogin = async (loginEmail: string, loginPass: string) => {
     if (!loginEmail.trim() || !loginPass) {
       setErrorMsg('Vui lòng nhập đầy đủ email và mật khẩu')
@@ -27,7 +34,9 @@ export function LoginPage() {
     try {
       const { error } = await signIn(loginEmail.trim(), loginPass)
       if (error) {
-        setErrorMsg(error.message || 'Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.')
+        if (mountedRef.current) {
+          setErrorMsg(error.message || 'Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.')
+        }
       } else {
         if (redirectUrl) {
           navigate(redirectUrl, { replace: true })
@@ -44,10 +53,14 @@ export function LoginPage() {
         }
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra'
-      setErrorMsg(msg)
+      if (mountedRef.current) {
+        const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra'
+        setErrorMsg(msg)
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -56,8 +69,13 @@ export function LoginPage() {
     await performLogin(email, password)
   }
 
-  const handleDemoLogin = async (role: 'student' | 'teacher') => {
-    const demoEmail = role === 'student' ? 'hocsinh@eduai.vn' : 'giangvien@eduai.vn'
+  const handleDemoLogin = async (role: 'student' | 'teacher' | 'admin') => {
+    const demoEmail =
+      role === 'admin'
+        ? 'admin@eduai.vn'
+        : role === 'teacher'
+        ? 'giangvien@eduai.vn'
+        : 'hocsinh@eduai.vn'
     const demoPass = '123456'
     setEmail(demoEmail)
     setPassword(demoPass)
@@ -164,27 +182,35 @@ export function LoginPage() {
           </button>
         </form>
 
-        {/* 2 Nút Demo Học sinh / Giảng viên */}
+        {/* Nút Demo Học sinh / Giảng viên / Quản trị viên */}
         <div className="mt-6 pt-5 border-t border-gray-100">
           <p className="text-xs text-center text-gray-500 font-medium mb-3">
             Hoặc đăng nhập nhanh bằng tài khoản thử nghiệm:
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => handleDemoLogin('student')}
               disabled={loading}
-              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 rounded-xl text-xs font-semibold transition"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 rounded-xl text-xs font-semibold transition"
             >
-              <GraduationCap className="w-4 h-4" /> Demo Học sinh
+              <GraduationCap className="w-3.5 h-3.5" /> Học sinh
             </button>
             <button
               type="button"
               onClick={() => handleDemoLogin('teacher')}
               disabled={loading}
-              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-semibold transition"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-semibold transition"
             >
-              <UserCheck className="w-4 h-4" /> Demo Giảng viên
+              <UserCheck className="w-3.5 h-3.5" /> Giảng viên
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('admin')}
+              disabled={loading}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-semibold transition"
+            >
+              <Shield className="w-3.5 h-3.5" /> Quản trị
             </button>
           </div>
         </div>

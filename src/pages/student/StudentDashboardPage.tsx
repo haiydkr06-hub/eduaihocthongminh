@@ -64,12 +64,16 @@ export function StudentDashboardPage() {
     Promise.all([
       studentService.getMyCourses(profile?.id),
       studentService.getDashboardStats(profile?.id),
-    ]).then(([coursesData, statsData]) => {
-      if (active) {
-        setCourses(coursesData)
-        setStats(statsData)
-      }
-    })
+    ])
+      .then(([coursesData, statsData]) => {
+        if (active) {
+          setCourses(coursesData)
+          setStats(statsData)
+        }
+      })
+      .catch(() => {
+        // an toàn khi có lỗi mạng
+      })
     return () => {
       active = false
     }
