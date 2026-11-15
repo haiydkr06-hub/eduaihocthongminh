@@ -10,7 +10,7 @@ import { RootRedirect } from '../components/auth/RootRedirect'
 import { StudentLayout } from '../components/layout/StudentLayout'
 import { StudentDashboardPage } from '../pages/student/StudentDashboardPage'
 import { StudentCoursesPage } from '../pages/student/StudentCoursesPage'
-import { StudentLearnPage } from '../pages/student/StudentLearnPage'
+import { LearningPage } from '../pages/student/LearningPage'
 import { StudentQuizPage } from '../pages/student/StudentQuizPage'
 import { StudentSchedulePage } from '../pages/student/StudentSchedulePage'
 import { StudentAchievementsPage } from '../pages/student/StudentAchievementsPage'
@@ -66,6 +66,21 @@ export const router = createBrowserRouter([
     path: '/student',
     element: <ProtectedRoute allowedRoles={['student', 'admin']} />,
     children: [
+      // Full-screen Learning Workspace (Không dùng Sidebar & Header chung)
+      {
+        path: 'learning/:courseId/:lessonId',
+        element: <LearningPage />,
+      },
+      {
+        path: 'learning/:courseId',
+        element: <LearningPage />,
+      },
+      {
+        path: 'learn/:courseId',
+        element: <LearningPage />,
+      },
+
+      // Standard Student Layout Pages
       {
         element: <StudentLayout />,
         children: [
@@ -80,10 +95,6 @@ export const router = createBrowserRouter([
           {
             path: 'courses',
             element: <StudentCoursesPage />,
-          },
-          {
-            path: 'learn/:courseId',
-            element: <StudentLearnPage />,
           },
           {
             path: 'quiz/:quizId',

@@ -11,7 +11,7 @@ import { RootRedirect } from './components/auth/RootRedirect'
 import { StudentLayout } from './components/layout/StudentLayout'
 import { StudentDashboardPage } from './pages/student/StudentDashboardPage'
 import { StudentCoursesPage } from './pages/student/StudentCoursesPage'
-import { StudentLearnPage } from './pages/student/StudentLearnPage'
+import { LearningPage } from './pages/student/LearningPage'
 import { StudentQuizPage } from './pages/student/StudentQuizPage'
 import { StudentSchedulePage } from './pages/student/StudentSchedulePage'
 import { StudentAchievementsPage } from './pages/student/StudentAchievementsPage'
@@ -54,11 +54,16 @@ export default function App() {
 
           {/* Student Routes (Protected - Student & Admin) */}
           <Route path="/student" element={<ProtectedRoute allowedRoles={['student', 'admin']} />}>
+            {/* Full-screen Learning Workspace (Không dùng Sidebar/Header chung) */}
+            <Route path="learning/:courseId/:lessonId" element={<LearningPage />} />
+            <Route path="learning/:courseId" element={<LearningPage />} />
+            <Route path="learn/:courseId" element={<LearningPage />} />
+
+            {/* Standard Student Pages (có Sidebar & Header) */}
             <Route element={<StudentLayout />}>
               <Route index element={<Navigate to="/student/dashboard" replace />} />
               <Route path="dashboard" element={<StudentDashboardPage />} />
               <Route path="courses" element={<StudentCoursesPage />} />
-              <Route path="learn/:courseId" element={<StudentLearnPage />} />
               <Route path="quiz/:quizId" element={<StudentQuizPage />} />
               <Route path="schedule" element={<StudentSchedulePage />} />
               <Route path="achievements" element={<StudentAchievementsPage />} />
