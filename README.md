@@ -1,147 +1,168 @@
-# EduAI — Hệ thống học tập thông minh tích hợp trí tuệ nhân tạo (AI)
+# EduAI — Nền tảng học tập thông minh tích hợp AI
 
-EduAI là nền tảng giáo dục trực tuyến toàn diện, kết nối học viên, giảng viên và quản trị viên với sự trợ lực mạnh mẽ từ trí tuệ nhân tạo (AI). Nền tảng được xây dựng trên nền React 19, TypeScript, Vite, Tailwind CSS và Supabase.
+EduAI là nền tảng học trực tuyến cho **3 vai trò: Học viên, Giảng viên, Quản trị viên**, xây dựng bằng React 19 + TypeScript + Vite + Tailwind CSS + Supabase, có các chức năng AI hỗ trợ giảng dạy.
 
 [![React](https://img.shields.io/badge/React-19-149eca?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite)](https://vite.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06b6d4?logo=tailwindcss)](https://tailwindcss.com/)
-[![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Auth-3ecf8e?logo=supabase)](https://supabase.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20Postgres-3ecf8e?logo=supabase)](https://supabase.com/)
 
 ---
 
-## Kiến trúc 3 phân hệ độc lập (RBAC)
+## 🚀 Chạy thử trong 1 phút (không cần cấu hình gì)
 
-### 1. Quản trị viên (Admin) — `/admin`
-- **Dashboard quản trị:** Thống kê tổng số học viên, giảng viên, khóa học, quiz, lượt nộp bài và tỷ lệ hoàn thành.
-- **Quản lý người dùng & phân quyền:** Tìm kiếm, lọc theo vai trò (`admin`, `teacher`, `student`), phân quyền nhanh qua modal xác thực.
-- **Kiểm duyệt khóa học:** Phê duyệt (`published`), chuyển nháp (`draft`) hoặc lưu trữ (`archived`).
-- **Quản lý bài kiểm tra (Quiz):** Quản lý đề thi, tỷ lệ đạt, xem chi tiết và xóa đề thi.
-- **Báo cáo & Thống kê hệ thống:** Tỷ lệ hoàn thành theo danh mục, phổ điểm học viên toàn trường, xuất báo cáo CSV.
-- **Thông báo toàn hệ thống:** Gửi thông báo broadcast tới học viên, giảng viên hoặc toàn trường.
-- **Cài đặt hệ thống:** Cấu hình thông tin trường học, AI Model (OpenAI / Google Gemini / Claude), Supabase và chế độ bảo trì.
+```bash
+git clone https://github.com/haiydkr06-hub/eduaihocthongminh.git
+cd eduaihocthongminh
+npm install
+npm run dev
+```
 
-### 2. Giảng viên (Teacher) — `/teacher`
-- **Dashboard giảng viên:** Theo dõi tổng học viên, khóa học đang dạy, bài kiểm tra và bài nộp cần chấm điểm.
-- **Quản lý khóa học của tôi:** Tạo khóa học mới, chỉnh sửa, thêm bài giảng kèm link video YouTube embed và thời lượng.
-- **Quản lý lớp học & học viên:** Danh sách học viên ghi danh, tiến độ học (%) và điểm số trung bình.
-- **Tạo & Quản lý bài kiểm tra:** Trình soạn quiz thủ công với danh sách câu hỏi trắc nghiệm, đáp án đúng và lời giải thích.
-- **Soạn Quiz tự động bằng AI:** Nhập tài liệu/nội dung bài giảng, AI tự động phân tích và sinh bộ câu hỏi trắc nghiệm kèm giải thích; giảng viên có thể xem trước, chỉnh sửa câu hỏi/đáp án trước khi xuất bản.
-- **Chấm điểm & Nhận xét:** Xem danh sách bài thi của học viên, chấm điểm, nhập nhận xét chi tiết.
-- **Thống kê kết quả giảng dạy:** Cảnh báo học viên cần lưu ý/tiến độ chậm, phân bố kết quả học tập.
-- **Hồ sơ giảng viên:** Cập nhật thông tin chuyên môn, khoa/bộ môn, tiểu sử và đổi mật khẩu.
+Mở `http://localhost:5173` và đăng nhập bằng một trong các tài khoản demo:
 
-### 3. Học viên (Student) — `/student`
-- **Dashboard học tập:** Giữ nguyên phong cách giao diện EduAI tím đặc trưng (`#6857DF`), thống kê khóa học, tiến độ cá nhân, bảng xếp hạng và biểu đồ thời gian học trong tuần.
-- **Khám phá & Khóa học của tôi:** Tìm kiếm theo danh mục môn học, lọc trạng thái, ghi danh vào khóa học mới với 1 cú click.
-- **Phòng học trực tuyến:** Xem bài giảng đa phương tiện (Video Player responsive), danh sách bài học, đánh dấu hoàn thành, tích hợp khung chat Trợ lý AI gia sư trực tiếp bên cạnh bài học.
-- **Làm bài kiểm tra trực tuyến (Quiz):** Đồng hồ đếm ngược thời gian thực, bảng điều hướng danh sách câu hỏi, nộp bài tính điểm tự động, hiển thị đáp án đúng kèm lời giải thích chi tiết.
-- **Lịch học & Lịch thi:** Theo dõi thời khóa biểu, lịch thi và hạn nộp bài tập theo ngày.
-- **Thành tích & Chứng chỉ:** Chuỗi học tập (Streak), điểm tích lũy (XP), huy hiệu danh hiệu và cấp chứng chỉ hoàn thành khóa học.
-- **Trợ lý AI học tập 24/7:** Hỏi đáp kiến thức mọi môn học Toán, Lý, Hóa, Tiếng Anh; gợi ý câu hỏi nhanh, hỗ trợ định dạng công thức và sao chép câu trả lời.
-- **Hồ sơ cá nhân:** Chỉnh sửa thông tin cá nhân và cập nhật mật khẩu.
+| Vai trò | Email | Mật khẩu |
+|---|---|---|
+| 👩‍🎓 Học viên | `student@demo.com` | `123456` |
+| 👨‍🏫 Giảng viên | `teacher@demo.com` | `123456` |
+| 🛡️ Quản trị viên | `admin@demo.com` | `123456` |
+
+> Trang đăng nhập có sẵn 3 nút **Trải nghiệm nhanh** để vào thẳng từng vai trò.
+
+**Chế độ demo** tự bật khi chưa cấu hình Supabase: dữ liệu mẫu (khóa học, bài học, quiz, bài làm, thông báo) được lưu trong `localStorage` của trình duyệt nên **mọi thao tác đều được lưu lại** và đồng bộ giữa 3 vai trò trên cùng trình duyệt. Muốn khôi phục dữ liệu mẫu ban đầu: xóa key `eduai_demo_db_v2` trong DevTools → Application → Local Storage.
+
+Yêu cầu: **Node.js 20.19+ hoặc 22.12+**.
 
 ---
 
-## Bảo mật & Phân quyền (Authentication & RLS)
+## ✨ Chức năng theo vai trò
 
-- **Supabase Authentication:** Hỗ trợ Đăng nhập, Đăng ký (lựa chọn vai trò Học viên hoặc Giảng viên), Quên mật khẩu và Đặt lại mật khẩu.
-- **Role-Based Access Control (RBAC):**
-  - Trang bảo vệ `ProtectedRoute`: Kiểm tra session đăng nhập và vai trò người dùng.
-  - Ngăn chặn triệt để hành vi truy cập trái phép bằng cách nhập URL trực tiếp.
-  - Tự động chuyển hướng đúng Dashboard theo vai trò sau khi đăng nhập (`/` $\rightarrow$ `/admin/dashboard`, `/teacher/dashboard`, hoặc `/student/dashboard`).
-  - Trang lỗi trực quan: `403 Unauthorized` (không đủ quyền hạn) và `404 Not Found`.
-- **Database Row Level Security (RLS):** 10 bảng dữ liệu (`profiles`, `courses`, `lessons`, `enrollments`, `lesson_progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `notifications`) được bảo vệ bằng RLS policy ở cấp cơ sở dữ liệu.
+### 👩‍🎓 Học viên — `/student`
+- **Tổng quan:** số khóa đang học, giờ học, điểm tích lũy, mục tiêu tuần, biểu đồ 7 ngày, bài học tiếp theo — **tính từ dữ liệu thật**, số đếm tăng dần.
+- **Khóa học:** khám phá danh mục, tìm kiếm (cả từ thanh tìm kiếm trên cùng), lọc theo môn, đăng ký khóa học.
+- **Phòng học:** nội dung bài học hiển thị Markdown + công thức toán (KaTeX), video YouTube, đánh dấu hoàn thành, ghi chú cá nhân, danh sách bài kiểm tra của khóa, gia sư AI bên cạnh.
+- **Làm quiz:** đồng hồ đếm ngược, bản đồ câu hỏi, xác nhận khi còn câu bỏ trống, tự nộp khi hết giờ, **giữ bài làm khi tải lại trang**, xem đáp án + giải thích sau khi nộp.
+- **Kế hoạch học tập:** khóa đang học dở và bài kiểm tra chưa đạt.
+- **Thành tích:** chuỗi ngày học, huy hiệu (có tiến độ), chứng chỉ hoàn thành khóa (in / lưu PDF).
+- **Thông báo, Hồ sơ:** đọc thông báo, cập nhật họ tên / SĐT, đổi mật khẩu.
+
+### 👨‍🏫 Giảng viên — `/teacher`
+- **Tổng quan:** số khóa, học viên, bài cần nhận xét, điểm trung bình, bài nộp gần đây.
+- **Khóa học:** tạo khóa (chờ Admin duyệt), thêm bài học (nội dung + video).
+- **Lớp học:** danh sách học viên theo khóa, tiến độ, điểm trung bình.
+- **Bài kiểm tra:** tạo quiz kèm câu hỏi, xuất bản / thu hồi.
+- **🤖 Soạn quiz bằng AI:** dán tài liệu → AI sinh câu hỏi từ chính nội dung tài liệu, đáp án được xáo trộn; giảng viên sửa và **phải tick xác nhận đã kiểm tra** mới xuất bản được.
+- **🤖 Trợ lý AI giảng dạy** (`/teacher/ai-insights`):
+  - **Câu hỏi hay bị sai:** tỷ lệ sai, phân bố lựa chọn, phương án học viên hay nhầm, AI phân tích nguyên nhân và gợi ý cách giảng lại.
+  - **Học viên có nguy cơ:** điểm nguy cơ 0–100 (không hoạt động 35% · tiến độ 25% · kết quả 30% · số lần trượt 10%), lý do cụ thể, **AI soạn lời nhắc** → sửa → gửi thông báo cho học viên.
+- **🤖 Chấm điểm & Nhận xét:** nút **"AI gợi ý nhận xét"** đọc từng câu đúng/sai và viết bản nháp nhận xét; khi lưu, học viên nhận thông báo kèm điểm và nhận xét.
+- **Thống kê giảng dạy:** tiến độ, điểm theo khóa, học viên cần hỗ trợ (dùng chung bộ chấm điểm nguy cơ).
+
+### 🛡️ Quản trị viên — `/admin`
+- **Tổng quan:** số học viên / giảng viên / khóa học / lượt làm bài, tỷ lệ đạt, khóa chờ duyệt, nhật ký hoạt động gần đây.
+- **Người dùng:** tìm kiếm theo tên/email, lọc vai trò, đổi vai trò (có xác nhận, không tự hạ quyền chính mình).
+- **Khóa học:** duyệt xuất bản / thu hồi / lưu trữ — giảng viên nhận thông báo kết quả.
+- **Bài kiểm tra, Báo cáo:** thống kê theo bộ môn, phổ điểm, **xuất CSV tiếng Việt có dấu** (mở đúng bằng Excel).
+- **Thông báo:** gửi tới toàn hệ thống / học viên / giảng viên.
+
+> Admin truy cập được cả khu vực Giảng viên và Học viên để kiểm tra.
 
 ---
 
-## Cài đặt và Khởi chạy
+## 🤖 Bộ máy AI kết hợp
 
-### Yêu cầu hệ thống
-- **Node.js:** phiên bản `20.19+` hoặc `22.12+`
-- **npm:** phiên bản `10+`
+| Tình huống | AI được dùng |
+|---|---|
+| Mặc định (chưa có key) | **AI mô phỏng** chạy trong trình duyệt — miễn phí, luôn hoạt động |
+| Đã cấu hình Supabase + `ANTHROPIC_API_KEY` | **Claude** (`claude-opus-5-5`) qua Supabase Edge Function `ai-assist` cho 3 chức năng AI của giảng viên |
+| Claude lỗi / quá tải | Tự quay về AI mô phỏng và báo cho giảng viên |
 
-### Các bước thực hiện
+- API key **chỉ** nằm trong Edge Function Secrets, không bao giờ xuống trình duyệt.
+- Mọi kết quả AI là **bản nháp** — giảng viên đọc, sửa trước khi dùng.
+- Gia sư AI của học viên và chức năng soạn quiz hiện chạy bằng AI mô phỏng.
 
-1. **Clone repository:**
-   ```bash
-   git clone https://github.com/haiydkr06-hub/eduaihocthongminh.git
-   cd eduaihocthongminh/eduai
-   ```
+Bật AI thật:
 
-2. **Cài đặt thư viện:**
-   ```bash
-   npm install
-   ```
+```bash
+supabase secrets set ANTHROPIC_API_KEY=<anthropic-api-key>
+supabase secrets set APP_ORIGIN=https://ten-mien-cua-ban   # khuyến nghị: giới hạn CORS
+supabase functions deploy ai-assist
+```
 
-3. **Cấu hình môi trường:**
-   Tạo file `.env.local` tại thư mục `eduai/` với thông tin Supabase của bạn:
+---
+
+## 🔐 Bảo mật & phân quyền
+
+- Route theo vai trò (`ProtectedRoute`), vai trò chỉ lấy từ bảng `profiles` — không tin dữ liệu người dùng tự gửi lên.
+- **Không ai tự đăng ký hay tự nâng quyền thành Admin** (trigger + RLS).
+- Chặn open redirect sau đăng nhập (`?redirect=//trang-la.com`).
+- **Chấm điểm quiz ở server** (RPC `submit_quiz_attempt`), học viên không đọc được đáp án trước khi nộp, không tự sửa điểm; chống nộp trùng.
+- Chỉ Admin được xuất bản khóa học; giảng viên chỉ quản lý khóa của mình; học viên chỉ xem nội dung khóa đã đăng ký.
+- Hồ sơ (email, SĐT) chỉ hiển thị cho chính chủ, Admin và giảng viên/học viên cùng khóa.
+
+---
+
+## 🗄️ Kết nối Supabase (tùy chọn)
+
+1. Tạo file `.env.local` ở thư mục gốc:
    ```dotenv
    VITE_SUPABASE_URL=https://your-project.supabase.co
    VITE_SUPABASE_ANON_KEY=your-anon-public-key
-   VITE_AI_API_URL=https://your-project.supabase.co/functions/v1/generate-quiz
    ```
-   *(Hệ thống đã có cơ chế fallback thông minh, ứng dụng vẫn hiển thị và chạy demo mượt mà ngay cả khi chưa kết nối Supabase).*
+2. Trong Supabase SQL Editor, chạy **lần lượt** 2 file (chạy lại nhiều lần không lỗi):
+   - `supabase/migrations/20261115_init_schema.sql`
+   - `supabase/migrations/20261116_security_hardening.sql`
+3. Tạo tài khoản Admin đầu tiên: đăng ký bình thường rồi chạy trong SQL Editor
+   `update public.profiles set role = 'admin' where email = 'email-cua-ban';`
+4. (Tùy chọn) Bật AI thật như mục trên.
 
-4. **Khởi chạy Database Migration:**
-   Mở SQL Editor trên Supabase Dashboard và thực thi script:
-   `supabase/migrations/20261115_init_schema.sql`
-
-5. **Khởi chạy ứng dụng:**
-   ```bash
-   npm run dev
-   ```
-   Mở trình duyệt tại: `http://localhost:5173`
-
-6. **Kiểm tra mã nguồn & Build:**
-   ```bash
-   npm run lint     # Oxlint kiểm tra cú pháp và quy tắc React (0 warnings, 0 errors)
-   npm run build    # TypeScript compiler (tsc -b) & Vite production build
-   ```
+Khi đã cấu hình Supabase, tài khoản demo bị tắt — mọi đăng nhập đi qua Supabase Auth.
 
 ---
 
-## Cấu trúc thư mục mã nguồn
+## 🎨 Giao diện "Aurora Glass"
+
+Nền cực quang chuyển động, thẻ kính mờ nổi lên khi rê chuột, banner dải màu chạy + vệt sáng, sidebar tím đêm dùng chung cho 3 vai trò, trang đăng nhập chia đôi có chữ tự gõ, số liệu đếm tăng dần, khối nội dung trượt vào khi chuyển trang. Responsive từ 320px; **mọi hiệu ứng tự tắt khi bật "giảm chuyển động"** (`prefers-reduced-motion`). Font: Be Vietnam Pro + Plus Jakarta Sans.
+
+---
+
+## 🧰 Lệnh thường dùng
+
+```bash
+npm run dev       # chạy phát triển
+npm run build     # kiểm tra TypeScript (tsc -b) + build production
+npm run lint      # oxlint
+npm run preview   # xem bản build
+```
+
+---
+
+## 📁 Cấu trúc thư mục
 
 ```text
-eduai/
-├── src/
-│   ├── app/
-│   │   └── router.tsx                     # Hệ thống định tuyến toàn diện & RBAC
-│   ├── components/
-│   │   ├── auth/
-│   │   │   ├── ProtectedRoute.tsx         # Route Guard ngăn chặn truy cập trái phép
-│   │   │   └── RootRedirect.tsx           # Điều hướng thông minh theo Role
-│   │   └── layout/
-│   │       ├── AdminLayout.tsx            # Khung giao diện Quản trị viên
-│   │       ├── TeacherLayout.tsx          # Khung giao diện Giảng viên
-│   │       └── StudentLayout.tsx          # Khung giao diện Học viên (Style tím đặc trưng)
-│   ├── contexts/
-│   │   ├── auth-context-base.ts          # Định nghĩa Context & Kiểu
-│   │   └── AuthContext.tsx                # Quản lý Session Supabase & Profile
-│   ├── hooks/
-│   │   └── useAuth.ts                     # Custom hook xác thực
-│   ├── lib/
-│   │   └── supabase.ts                    # Supabase Client khởi tạo
-│   ├── pages/
-│   │   ├── admin/                         # 7 trang nghiệp vụ Admin
-│   │   ├── teacher/                       # 7 trang nghiệp vụ Teacher + AI Quiz
-│   │   ├── student/                       # 7 trang nghiệp vụ Student + AI Tutor
-│   │   ├── auth/                          # Login, Register, Forgot, Reset Password
-│   │   └── error/                         # 403 Unauthorized, 404 Not Found
-│   ├── services/
-│   │   ├── adminService.ts                # Dữ liệu & Thống kê Admin
-│   │   ├── teacherService.ts              # Quản lý khóa học, bài học, chấm điểm
-│   │   ├── studentService.ts              # Học tập, nộp quiz, tiến độ, thành tích
-│   │   └── aiService.ts                   # Trợ lý AI Gia sư & AI Quiz Generator
-│   ├── types/
-│   │   └── auth.ts                        # TypeScript interfaces & Enums
-│   ├── App.css
-│   ├── index.css
-│   └── main.tsx
+├── docs/                         Tài liệu nghiệp vụ / giao diện / kỹ thuật
 ├── supabase/
-│   └── migrations/
-│       └── 20261115_init_schema.sql       # 10 bảng, Trigger, RLS Policies & Indices
-├── package.json
-└── vite.config.ts
+│   ├── migrations/               Schema, RLS, RPC chấm điểm
+│   └── functions/ai-assist/      Edge Function gọi Claude
+└── src/
+    ├── App.tsx                   Định tuyến theo vai trò (lazy-load từng trang)
+    ├── index.css                 Hệ thống giao diện Aurora Glass
+    ├── components/               AppShell (khung 3 vai trò), MarkdownContent, CountUp, auth/
+    ├── contexts/AuthContext.tsx  Đăng nhập / đăng ký / hồ sơ (demo hoặc Supabase)
+    ├── hooks/                    useAuth, useNotifications, useTeacherScope
+    ├── lib/                      supabase, demoAccounts, errorMessage, localPrefs
+    ├── services/                 student/teacher/admin/notification service,
+    │                             aiEngine (AI kết hợp), teacherAiService, aiService, demoDb
+    ├── layouts/                  Khung trang Học viên + thanh tìm kiếm, chuông thông báo
+    └── pages/                    auth/, student/, teacher/, admin/, error/
 ```
+
+---
+
+## ⚠️ Giới hạn hiện tại
+
+- Chế độ demo lưu dữ liệu trong trình duyệt, mỗi trình duyệt có dữ liệu riêng.
+- Chế độ demo không gửi được email khôi phục mật khẩu (trang Quên mật khẩu sẽ thông báo rõ).
+- Giảng viên chưa sửa / xóa được bài học và câu hỏi sau khi lưu; chưa có trang công khai giới thiệu khóa học trước khi đăng nhập.
+- Đường gọi Claude thật đã được kiểm tra kiểu với SDK chính thức nhưng cần API key để chạy thực tế.
+- Chưa có bộ test tự động (`npm test`).

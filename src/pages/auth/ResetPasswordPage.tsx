@@ -15,6 +15,8 @@ export function ResetPasswordPage() {
 
   const mountedRef = useRef(true)
   useEffect(() => {
+    // Đặt lại true mỗi lần mount (StrictMode chạy mount → cleanup → mount; trước đây bị kẹt ở false)
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
     }

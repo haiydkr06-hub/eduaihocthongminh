@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Sparkles, Mail, Send, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { AuroraBackground } from '../../components/layout/AppShell'
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -13,6 +14,8 @@ export function ForgotPasswordPage() {
 
   const mountedRef = useRef(true)
   useEffect(() => {
+    // Đặt lại true mỗi lần mount (StrictMode chạy mount → cleanup → mount; trước đây bị kẹt ở false)
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
     }
@@ -55,10 +58,11 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f8fc] flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-[#eceef4] p-8 md:p-10">
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <AuroraBackground />
+      <div className="auth-card relative max-w-md w-full rounded-[28px] bg-white/75 backdrop-blur-xl border border-white shadow-[0_30px_70px_-30px_rgba(76,61,190,0.45)] p-8 md:p-10">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#7966f2] to-[#5f4ce0] text-white flex items-center justify-center shadow-lg shadow-[#6653df]/30 mb-4">
+          <div className="brand-orb w-14 h-14 rounded-2xl text-[#ffd6ec] flex items-center justify-center shadow-lg mb-4">
             <Sparkles className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-black text-[#252641] tracking-tight">

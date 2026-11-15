@@ -290,8 +290,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = useCallback(async (email: string) => {
     setError(null)
     if (!isSupabaseConfigured) {
-      // Mock thành công cho môi trường demo
-      return { error: null }
+      // Chế độ demo không có máy chủ gửi email -> báo rõ thay vì báo "đã gửi" giả
+      const demoErr = new Error(
+        'Chế độ demo chưa kết nối máy chủ email nên không gửi được thư khôi phục. Tài khoản demo dùng mật khẩu 123456; tài khoản bạn tự đăng ký có thể đổi mật khẩu trong mục Hồ sơ sau khi đăng nhập.'
+      )
+      setError(demoErr.message)
+      return { error: demoErr }
     }
     try {
       const { error: resetErr } = await withTimeout(
