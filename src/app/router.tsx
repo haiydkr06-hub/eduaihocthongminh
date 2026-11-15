@@ -8,7 +8,14 @@ import { NotFoundPage } from '../pages/error/NotFoundPage'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import { RootRedirect } from '../components/auth/RootRedirect'
 import { StudentDashboardPage } from '../pages/student/StudentDashboardPage'
+import { TeacherLayout } from '../components/layout/TeacherLayout'
 import { TeacherDashboardPage } from '../pages/teacher/TeacherDashboardPage'
+import { TeacherCoursesPage } from '../pages/teacher/TeacherCoursesPage'
+import { TeacherClassesPage } from '../pages/teacher/TeacherClassesPage'
+import { TeacherQuizzesPage } from '../pages/teacher/TeacherQuizzesPage'
+import { TeacherGradingPage } from '../pages/teacher/TeacherGradingPage'
+import { TeacherAnalyticsPage } from '../pages/teacher/TeacherAnalyticsPage'
+import { TeacherProfilePage } from '../pages/teacher/TeacherProfilePage'
 import { AdminLayout } from '../components/layout/AdminLayout'
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage'
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage'
@@ -66,12 +73,41 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute allowedRoles={['teacher', 'admin']} />,
     children: [
       {
-        path: '',
-        element: <Navigate to="/teacher/dashboard" replace />,
-      },
-      {
-        path: 'dashboard',
-        element: <TeacherDashboardPage />,
+        element: <TeacherLayout />,
+        children: [
+          {
+            path: '',
+            element: <Navigate to="/teacher/dashboard" replace />,
+          },
+          {
+            path: 'dashboard',
+            element: <TeacherDashboardPage />,
+          },
+          {
+            path: 'courses',
+            element: <TeacherCoursesPage />,
+          },
+          {
+            path: 'classes',
+            element: <TeacherClassesPage />,
+          },
+          {
+            path: 'quizzes',
+            element: <TeacherQuizzesPage />,
+          },
+          {
+            path: 'grading',
+            element: <TeacherGradingPage />,
+          },
+          {
+            path: 'analytics',
+            element: <TeacherAnalyticsPage />,
+          },
+          {
+            path: 'profile',
+            element: <TeacherProfilePage />,
+          },
+        ],
       },
     ],
   },
